@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "schedule": {
+    "time": "09:00",
+    "timezone": "Asia/Shanghai",
+    "catch_up": true,
+    "retry_interval_minutes": 30
+  },
+  "archive": {
+    "root": "~/paper-notes",
+    "history_file": "",
+    "log_directory": ""
+  },
+  "digest": {
+    "language": "zh-CN",
+    "total_papers": 15,
+    "top_recommendations": 3,
+    "categories": [
+      {
+        "key": "generation",
+        "label": "图像与视频生成",
+        "quota": 3,
+        "search_terms": ["image generation", "video generation", "text-to-image", "text-to-video", "diffusion", "flow matching", "image editing", "video editing", "visual generation"],
+        "arxiv_categories": ["cs.CV", "cs.AI", "cs.LG"],
+        "negative_terms": [],
+        "zotero_collection": "Generation"
+      },
+      {
+        "key": "understanding",
+        "label": "多模态理解",
+        "quota": 4,
+        "search_terms": ["vision-language", "vision language", "VLM", "multimodal", "visual reasoning", "video understanding", "image understanding", "VQA", "visual grounding", "long video", "omnimodal"],
+        "arxiv_categories": ["cs.CV", "cs.CL", "cs.AI"],
+        "negative_terms": [],
+        "zotero_collection": "Understanding"
+      },
+      {
+        "key": "agentic_rl",
+        "label": "Agentic RL",
+        "quota": 3,
+        "search_terms": ["agentic reinforcement learning", "LLM agent", "VLM agent", "tool use", "computer use", "web agent", "coding agent", "reinforcement learning", "policy optimization", "verifiable reward", "process reward", "credit assignment", "self-improving agent", "multi-agent", "long-horizon agent"],
+        "arxiv_categories": ["cs.AI", "cs.CL", "cs.LG", "cs.CV"],
+        "negative_terms": [],
+        "zotero_collection": "Agentic RL"
+      },
+      {
+        "key": "embodied_vla_wam",
+        "label": "具身智能 · VLA · WAM",
+        "quota": 3,
+        "search_terms": ["embodied AI", "embodied intelligence", "vision-language-action", "vision language action", "VLA", "robot foundation model", "robotic manipulation", "humanoid", "dexterous manipulation", "robot navigation", "cross-embodiment", "diffusion policy", "world action model", "world-and-action model", "action-conditioned world model", "latent action"],
+        "arxiv_categories": ["cs.RO", "cs.CV", "cs.AI", "cs.LG"],
+        "negative_terms": [],
+        "zotero_collection": "Embodied · VLA · WAM"
+      },
+      {
+        "key": "others",
+        "label": "世界模型与其他",
+        "quota": 2,
+        "search_terms": ["world model", "world simulator", "interactive world", "video world", "visual tokenizer", "future prediction", "neural rendering", "3D generation", "4D generation", "multimodal foundation model"],
+        "arxiv_categories": ["cs.CV", "cs.AI", "cs.LG"],
+        "negative_terms": [],
+        "zotero_collection": "Others"
+      }
+    ]
+  },
+  "selection": {
+    "lookback_days": 7,
+    "max_results_per_source": 200,
+    "minimum_original_figures": 2,
+    "maximum_original_figures": 4,
+    "allow_quota_rebalance": false,
+    "global_negative_terms": ["medical", "clinical", "MRI", "CT scan", "pathology", "tumor", "remote sensing", "satellite", "autonomous driving", "protein", "molecule", "drug discovery"],
+    "additional_history_files": []
+  },
+  "agent": {
+    "harness": "codex",
+    "executable": "",
+    "custom_command": [],
+    "timeout_minutes": 120
+  },
+  "zotero": {
+    "enabled": true,
+    "required": true,
+    "database": "",
+    "top_collection": "codex",
+    "launch": true
+  }
+}

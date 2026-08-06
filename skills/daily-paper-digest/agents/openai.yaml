@@ -1,0 +1,4 @@
+interface:
+  display_name: "Daily Paper Digest"
+  short_description: "Search, summarize, archive, and route daily papers"
+  default_prompt: "Use $daily-paper-digest to create today’s configured, deduplicated paper digest."
