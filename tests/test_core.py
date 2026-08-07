@@ -148,6 +148,7 @@ class VerificationTests(unittest.TestCase):
                     "operation": "score, retain, and transform candidates with the stated rule",
                     "output": "ranked candidates passed to the next processing stage",
                     "purpose": "remove low-quality candidates before downstream optimization",
+                    "timing": "data construction, training, or inference as identified by the paper",
                     "evidence": f"paper section {index}, algorithm and figure",
                 }
                 for index in range(1, 4)
@@ -175,25 +176,52 @@ class VerificationTests(unittest.TestCase):
             }
             atomic_write_json(day / "seed-paper.json", paper)
             core = "\n".join(
-                f"### 阶段 {index}：具体操作\n\n**输入**：候选种子。**操作**：逐项评分、筛选并传递。**输出**：下一阶段候选。**目的**：避免错误累积。**证据**：算法 {index}。" + "该阶段说明具体保留与丢弃规则。" * 20
+                f"### 阶段 {index}：具体操作\n\n**输入**：候选种子及其分数表示。**操作**：依据论文阈值逐项评分、筛选并传递。**输出**：带有来源标记的下一阶段候选。**目的**：在进入下游优化前避免低质量候选造成错误累积。**时机**：论文所述的数据构造或训练阶段。**证据**：算法 {index} 与对应图表。" + "该阶段逐项说明具体计算、保留条件、丢弃条件以及下游如何消费输出。" * 18
                 for index in range(1, 4)
             )
+            situation = (
+                "论文研究候选种子经过多阶段筛选后用于下游训练的场景。原始候选在正确性、覆盖度和难度上分布不均，"
+                "直接使用会把噪声传入后续优化并造成错误累积。已有一次性过滤方法只观察单一分数，无法解释候选在哪个阶段失效，"
+                "也不能同时保证多样性和可验证性。论文据此把数据质量控制视为贯穿全流程的问题，并用正文分析和失败案例界定影响。"
+            ) * 3
+            task = (
+                "给定原始候选、任务上下文和论文定义的评分信号，方法需要输出可供下一阶段直接消费的高质量候选集合。"
+                "目标是在保持覆盖度的同时降低错误率，并满足预算、阈值和可验证性约束；评估同时考察最终任务指标、筛选质量与消融结果。"
+                "论文处理的是该输入输出合同内的数据选择问题，不把未报告的部署条件或额外监督来源算作方法能力。"
+            ) * 3
+            result = (
+                "论文在指定数据集和统一实验条件下，用正文表格报告主要指标并与同规模基线比较；指标方向、绝对差值和实验设置均应一起读取。"
+                "消融实验分别移除评分、筛选或后续变换，以确认各阶段对最终结果的贡献；定性案例补充展示保留与丢弃的候选差异。"
+                "这些证据支持多阶段链路在论文测试范围内有效，但不能证明它在未评测领域、不同预算或未披露实现条件下仍保持相同收益。"
+            ) * 3
             note = f"""# Seed Paper
 
 - **论文**：https://arxiv.org/abs/2608.01234
 
 ## 一句话总结
 总结。
-## 具体失败模式与已有方法为何不够
-失败模式。
-## 核心创新：从输入到输出的逐阶段操作链
+## S｜Situation：研究情境与具体失败模式
+{situation}
+## T｜Task：论文要解决的任务与约束
+{task}
+## A｜Action：从输入到输出的逐阶段操作链
 {core}
-![图一](images/seed-paper/figure-01.png)
-![图二](images/seed-paper/figure-02.png)
-## 训练目标、奖励或关键公式
-目标。
-## 关键指标与实验结论
-结果。
+![图 1：候选种子从生成、评分到筛选的完整方法链路](images/seed-paper/figure-01.png)
+
+### 训练目标、奖励与关键公式
+
+目标函数对保留候选赋予论文定义的训练权重；变量、被更新参数和行为影响均在正文中逐项解释。
+
+### 训练与推理的差异
+
+训练阶段使用评分与筛选信号更新模型，推理阶段只执行已训练模型的前向路径，不再访问训练标签。
+
+### 贯穿全流程的具体样例
+
+一个候选从原始输入进入第一阶段，获得分数后被保留，再经变换形成训练样本，最后由模型产生任务输出。
+## R｜Result：实验结果、收益与证据
+{result}
+![图 2：主要结果与阶段消融在统一设置下的对比](images/seed-paper/figure-02.png)
 ## 与我的研究方向的关联
 关联。
 ## 局限与证据边界
@@ -214,6 +242,13 @@ Abstract.
                 encoding="utf-8",
             )
             run_date = datetime(2026, 8, 6).date()
+            (day / "seed-paper.md").write_text(
+                note.replace(situation, "场景说明过短。"),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "Situation"):
+                verify(config, config_path, run_date)
+            (day / "seed-paper.md").write_text(note, encoding="utf-8")
             verified_day, verified_digest, papers = verify(config, config_path, run_date)
             finalize(config, config_path, run_date, verified_day, verified_digest, papers)
             verified_day, verified_digest, papers = verify(config, config_path, run_date)

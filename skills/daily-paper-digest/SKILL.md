@@ -1,6 +1,6 @@
 ---
 name: daily-paper-digest
-description: "Build or operate a configurable daily research-paper digest: search recent papers by user-defined categories and quotas, deduplicate past pushes, download each paper's own figures into isolated folders, write detailed Chinese Markdown notes, validate them, add Zotero deep links, and run on a schedule. Use for daily paper pushes, paper radar/digest automation, arXiv monitoring, research-note generation, Zotero routing, missed-run recovery, or changing delivery time, timezone, topics, ratios, counts, and archive paths."
+description: "Build or operate a configurable daily research-paper digest: search recent papers by user-defined categories and quotas, deduplicate past pushes, download each paper's own figures into isolated folders, write detailed Chinese Markdown notes with the STAR method, validate them, add Zotero deep links, and run on a schedule. Use for daily paper pushes, paper radar/digest automation, arXiv monitoring, research-note generation, Zotero routing, missed-run recovery, or changing delivery time, timezone, topics, ratios, counts, and archive paths."
 ---
 
 # Daily Paper Digest
@@ -35,27 +35,35 @@ If the user requests a configuration change, run `configure.py` first, then rein
 
    This step searches, removes known arXiv IDs and normalized duplicate titles, fills configured category quotas, and creates `<archive>/YYYY/MM/DD/` with `digest.json`, one JSON source record per paper, `sources/<slug>/`, and isolated `images/<slug>/` folders.
 
-3. Read `<day>/JOB.md`, `<day>/digest.json`, and every selected paper JSON. Write exactly one `<slug>.md` per paper plus `<day>/digest.md`. Update each paper JSON with the analytical fields required by [note-contract.md](references/note-contract.md).
+3. Read `<day>/JOB.md`, `<day>/digest.json`, every selected paper JSON, and the source files referenced by that JSON. Write exactly one `<slug>.md` per paper plus `<day>/digest.md`. Update each paper JSON with the analytical fields required by [note-contract.md](references/note-contract.md).
 
-4. Explain the method as an operation chain, not as slogans. For every paper, reconstruct at least three stages from input/data construction through training or optimization to inference/output. Every stage must state:
+4. Organize every paper note with STAR. Treat STAR as an analytical structure, not four short labels:
+
+   - **Situation**: establish the application/research setting, relevant inputs or environment, the concrete failure mode, and why representative prior approaches are insufficient.
+   - **Task**: state the exact problem the paper solves, input/output contract, optimization or decision objective, constraints, evaluation targets, and scope boundaries.
+   - **Action**: reconstruct the proposed method as an operation chain from actual input/data construction through training or optimization to inference/output. This is the most detailed section.
+   - **Result**: report evidence with metric direction, dataset/environment, baseline, and comparison context; include ablations or qualitative findings when available and separate results from interpretation.
+
+5. In **Action**, reconstruct at least three real stages. Every stage must state:
 
    - its concrete input and representation;
    - the operation, module, objective, or update actually applied;
    - the resulting output passed to the next stage;
    - why the stage exists and what failure it addresses;
+   - whether it runs during data construction, training, post-training/RL, or inference;
    - the paper evidence supporting the claim.
 
-   Top recommendations require extra depth. If a paper has multiple phases such as seed generation, scoring, pruning, refinement, and final selection, explain each phase separately, including what is retained or discarded and how the next phase consumes the result.
+   Top recommendations require extra depth. If a paper has multiple phases such as seed generation, scoring, pruning, refinement, and final selection, explain each phase separately, including the decision rule, what is retained or discarded, and how the next phase consumes the result. Also trace one concrete example through the entire chain. Do not merge distinct phases into phrases such as “iteratively improves the seed.”
 
-5. Use only figures listed in that paper's JSON. Markdown image paths for paper `<slug>` must start with `images/<slug>/`; never reuse another paper's image or move all images into a shared flat namespace. Embed 2–4 semantically relevant original figures unless the source record explicitly records that fewer exist.
+6. Use only figures listed in that paper's JSON. Markdown image paths for paper `<slug>` must start with `images/<slug>/`; never reuse another paper's image or move all images into a shared flat namespace. Embed 2–4 semantically necessary original figures unless the source record explicitly records that fewer exist. Put each figure immediately after the STAR claim it explains, with a Chinese caption that says what to inspect and why it supports that claim. At least one available figure must appear inside **Action**; use Result figures for quantitative or qualitative evidence when useful.
 
-6. Validate before publishing:
+7. Validate before publishing:
 
    ```text
    python <SKILL_DIR>/scripts/verify_digest.py --config <CONFIG> --date YYYY-MM-DD
    ```
 
-7. If Zotero is enabled, start Zotero and link/import the papers:
+8. If Zotero is enabled, start Zotero and link/import the papers:
 
    ```text
    python <SKILL_DIR>/scripts/zotero_bridge.py link --config <CONFIG> --date YYYY-MM-DD
@@ -63,7 +71,7 @@ If the user requests a configuration change, run `configure.py` first, then rein
 
    Then rerun verification. The Markdown link must open the attached PDF through `zotero://open-pdf/...`, and the item must be assigned to the configured top collection and category child collection.
 
-8. Commit the deduplication history only after every required check passes:
+9. Commit the deduplication history only after every required check passes:
 
    ```text
    python <SKILL_DIR>/scripts/verify_digest.py --config <CONFIG> --date YYYY-MM-DD --finalize

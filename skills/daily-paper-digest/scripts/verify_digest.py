@@ -31,15 +31,27 @@ from common import (
 
 REQUIRED_SECTIONS = (
     "## 一句话总结",
-    "## 具体失败模式与已有方法为何不够",
-    "## 核心创新：从输入到输出的逐阶段操作链",
-    "## 训练目标、奖励或关键公式",
-    "## 关键指标与实验结论",
+    "## S｜Situation：研究情境与具体失败模式",
+    "## T｜Task：论文要解决的任务与约束",
+    "## A｜Action：从输入到输出的逐阶段操作链",
+    "## R｜Result：实验结果、收益与证据",
     "## 与我的研究方向的关联",
     "## 局限与证据边界",
     "## 原文摘要",
 )
-STAGE_FIELDS = ("name", "input", "operation", "output", "purpose", "evidence")
+STAR_MINIMUMS = {
+    "## S｜Situation：研究情境与具体失败模式": 300,
+    "## T｜Task：论文要解决的任务与约束": 220,
+    "## R｜Result：实验结果、收益与证据": 300,
+}
+ACTION_HEADING = "## A｜Action：从输入到输出的逐阶段操作链"
+ACTION_SUBSECTIONS = (
+    "### 训练目标、奖励与关键公式",
+    "### 训练与推理的差异",
+    "### 贯穿全流程的具体样例",
+)
+STAGE_FIELDS = ("name", "input", "operation", "output", "purpose", "timing", "evidence")
+STAGE_LABELS = ("输入", "操作", "输出", "目的", "时机", "证据")
 ZOTERO_URI = re.compile(r"zotero://open-pdf/library/items/[A-Z0-9]{8}")
 
 
@@ -88,8 +100,18 @@ def validate_paper(
     for section in REQUIRED_SECTIONS:
         if section not in markdown:
             raise RuntimeError(f"{slug}: missing required section {section}")
+    positions = [markdown.find(section) for section in REQUIRED_SECTIONS]
+    if positions != sorted(positions):
+        raise RuntimeError(f"{slug}: required sections are not in the STAR contract order")
     if str(paper.get("paper_url", "")) not in markdown:
         raise RuntimeError(f"{slug}: original-paper URL is absent from Markdown")
+
+    for heading, minimum in STAR_MINIMUMS.items():
+        length = compact_length(section_text(markdown, heading))
+        if length < minimum:
+            raise RuntimeError(
+                f"{slug}: {heading} has {length} non-space characters; requires {minimum}"
+            )
 
     stages = paper.get("method_stages")
     if not isinstance(stages, list) or len(stages) < 3:
@@ -99,11 +121,20 @@ def validate_paper(
     markdown_stage_count = len(re.findall(r"^###\s*阶段\s*\d+\s*[：:]", markdown, flags=re.MULTILINE))
     if markdown_stage_count < len(stages) or markdown_stage_count < 3:
         raise RuntimeError(f"{slug}: Markdown has {markdown_stage_count} stage headings for {len(stages)} JSON stages")
-    core = section_text(markdown, "## 核心创新：从输入到输出的逐阶段操作链")
+    action = section_text(markdown, ACTION_HEADING)
+    for subsection in ACTION_SUBSECTIONS:
+        if subsection not in action:
+            raise RuntimeError(f"{slug}: Action is missing required subsection {subsection}")
+    for label in STAGE_LABELS:
+        count = len(re.findall(rf"\*\*{re.escape(label)}\*\*\s*[：:]", action))
+        if count < len(stages):
+            raise RuntimeError(
+                f"{slug}: Action contains {count} **{label}** fields for {len(stages)} stages"
+            )
     required_length = 1000 if paper.get("top_recommendation") else 700
-    if compact_length(core) < required_length:
+    if compact_length(action) < required_length:
         raise RuntimeError(
-            f"{slug}: core innovation has {compact_length(core)} non-space characters; "
+            f"{slug}: Action has {compact_length(action)} non-space characters; "
             f"requires {required_length}"
         )
 
@@ -112,7 +143,8 @@ def validate_paper(
         for figure in paper.get("figures", [])
         if isinstance(figure, dict) and figure.get("source_kind") == "original-paper-figure"
     }
-    references = re.findall(r"!\[[^\]]*\]\((images/[^)\s]+)\)", markdown)
+    embedded = re.findall(r"!\[([^\]]*)\]\((images/[^)\s]+)\)", markdown)
+    references = [reference for _, reference in embedded]
     minimum = min(2, len(allowed_figures))
     if not minimum <= len(references) <= 4:
         raise RuntimeError(f"{slug}: expected {minimum}–4 embedded original figures, found {len(references)}")
@@ -126,6 +158,12 @@ def validate_paper(
             raise RuntimeError(f"{slug}: image is not listed in this paper JSON: {reference}")
         if not (day / reference).is_file():
             raise RuntimeError(f"{slug}: referenced image is missing: {reference}")
+    for alt_text, reference in embedded:
+        if compact_length(alt_text) < 8:
+            raise RuntimeError(f"{slug}: figure caption is too vague for {reference}")
+    action_references = re.findall(r"!\[[^\]]*\]\((images/[^)\s]+)\)", action)
+    if allowed_figures and not action_references:
+        raise RuntimeError(f"{slug}: at least one available original figure must be placed inside Action")
 
     for figure in paper.get("figures", []):
         if figure.get("source_kind") != "original-paper-figure" or not str(figure.get("source_url", "")).startswith(("https://", "http://")):
