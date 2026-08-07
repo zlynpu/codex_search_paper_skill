@@ -143,15 +143,12 @@ class VerificationTests(unittest.TestCase):
             (image_dir / "figure-02.png").write_bytes(b"png-two")
             stages = [
                 {
-                    "name": f"method stage {index}",
-                    "input": "candidate seeds and prompt representation",
-                    "operation": "score, retain, and transform candidates with the stated rule",
-                    "output": "ranked candidates passed to the next processing stage",
-                    "purpose": "remove low-quality candidates before downstream optimization",
-                    "timing": "data construction, training, or inference as identified by the paper",
-                    "evidence": f"paper section {index}, algorithm and figure",
+                    "name": "种子筛选与精炼",
+                    "source_heading": "Seed Selection and Refinement",
+                    "translation": "论文把候选种子的评分、保留、丢弃与后续精炼定义为一个统一的方法部分，并明确各操作的先后关系。",
+                    "explanation": "通俗地说，这一部分像一条带质量门控的流水线：候选种子和任务上下文先按论文阈值评分，低质量项被丢弃，保留项再精炼成下游训练样本。它发生在数据构造和训练准备阶段，推理时不再执行，并通过原文算法与图表给出依据。",
+                    "evidence": "Method section Seed Selection and Refinement, algorithm and figure",
                 }
-                for index in range(1, 4)
             ]
             paper = {
                 "arxiv_id": "2608.01234",
@@ -175,9 +172,16 @@ class VerificationTests(unittest.TestCase):
                 ],
             }
             atomic_write_json(day / "seed-paper.json", paper)
-            core = "\n".join(
-                f"### 阶段 {index}：具体操作\n\n**输入**：候选种子及其分数表示。**操作**：依据论文阈值逐项评分、筛选并传递。**输出**：带有来源标记的下一阶段候选。**目的**：在进入下游优化前避免低质量候选造成错误累积。**时机**：论文所述的数据构造或训练阶段。**证据**：算法 {index} 与对应图表。" + "该阶段逐项说明具体计算、保留条件、丢弃条件以及下游如何消费输出。" * 18
-                for index in range(1, 4)
+            core = (
+                "### 方法部分 1：种子筛选与精炼（Seed Selection and Refinement）\n\n"
+                "**翻译**：论文将候选种子的评分、保留、丢弃和后续精炼放在同一个 Method 小节中，"
+                "并按原文顺序说明质量门控与下游接口。"
+                "**解释**：可以把它理解为一条带质检的流水线。输入是候选种子、任务上下文及其分数表示；"
+                "系统依据论文给定的阈值和目标函数逐项评分、筛选，再对保留项执行精炼。输出是带来源与评分标记、"
+                "可直接供下游训练消费的候选集合。该操作发生在数据构造与训练准备阶段，推理时不再执行；"
+                "它的作用是在进入下游优化前阻断低质量候选造成的错误累积。证据来自 Method 小节 "
+                "Seed Selection and Refinement、对应算法与 Figure 1。"
+                + "这一部分继续解释具体计算、保留条件、丢弃条件以及下游如何消费输出。" * 10
             )
             situation = (
                 "论文研究候选种子经过多阶段筛选后用于下游训练的场景。原始候选在正确性、覆盖度和难度上分布不均，"
@@ -204,21 +208,9 @@ class VerificationTests(unittest.TestCase):
 {situation}
 ## T｜Task：论文要解决的任务与约束
 {task}
-## A｜Action：从输入到输出的逐阶段操作链
+## A｜Action：按论文 Method 逐部分翻译与解释
 {core}
 ![图 1：候选种子从生成、评分到筛选的完整方法链路](images/seed-paper/figure-01.png)
-
-### 训练目标、奖励与关键公式
-
-目标函数对保留候选赋予论文定义的训练权重；变量、被更新参数和行为影响均在正文中逐项解释。
-
-### 训练与推理的差异
-
-训练阶段使用评分与筛选信号更新模型，推理阶段只执行已训练模型的前向路径，不再访问训练标签。
-
-### 贯穿全流程的具体样例
-
-一个候选从原始输入进入第一阶段，获得分数后被保留，再经变换形成训练样本，最后由模型产生任务输出。
 ## R｜Result：实验结果、收益与证据
 {result}
 ![图 2：主要结果与阶段消融在统一设置下的对比](images/seed-paper/figure-02.png)
@@ -247,6 +239,17 @@ Abstract.
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(RuntimeError, "Situation"):
+                verify(config, config_path, run_date)
+            extra_part = (
+                "### 方法部分 2：虚构步骤（Invented Step）\n\n"
+                "**翻译**：这个部分并不存在于论文 Method 中。\n"
+                "**解释**：验证器应拒绝 Markdown 与 JSON 方法部分数量不一致。\n"
+            )
+            (day / "seed-paper.md").write_text(
+                note.replace("## R｜Result：实验结果、收益与证据", extra_part + "## R｜Result：实验结果、收益与证据"),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "2 Method-part headings"):
                 verify(config, config_path, run_date)
             (day / "seed-paper.md").write_text(note, encoding="utf-8")
             verified_day, verified_digest, papers = verify(config, config_path, run_date)

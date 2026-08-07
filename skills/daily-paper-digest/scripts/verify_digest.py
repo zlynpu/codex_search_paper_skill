@@ -33,7 +33,7 @@ REQUIRED_SECTIONS = (
     "## 一句话总结",
     "## S｜Situation：研究情境与具体失败模式",
     "## T｜Task：论文要解决的任务与约束",
-    "## A｜Action：从输入到输出的逐阶段操作链",
+    "## A｜Action：按论文 Method 逐部分翻译与解释",
     "## R｜Result：实验结果、收益与证据",
     "## 与我的研究方向的关联",
     "## 局限与证据边界",
@@ -44,14 +44,20 @@ STAR_MINIMUMS = {
     "## T｜Task：论文要解决的任务与约束": 220,
     "## R｜Result：实验结果、收益与证据": 300,
 }
-ACTION_HEADING = "## A｜Action：从输入到输出的逐阶段操作链"
-ACTION_SUBSECTIONS = (
-    "### 训练目标、奖励与关键公式",
-    "### 训练与推理的差异",
-    "### 贯穿全流程的具体样例",
+ACTION_HEADING = "## A｜Action：按论文 Method 逐部分翻译与解释"
+METHOD_PART_HEADING = re.compile(
+    r"^###\s*方法部分\s*(\d+)\s*[：:]\s*(.+)$",
+    flags=re.MULTILINE,
 )
-STAGE_FIELDS = ("name", "input", "operation", "output", "purpose", "timing", "evidence")
-STAGE_LABELS = ("输入", "操作", "输出", "目的", "时机", "证据")
+METHOD_PART_MINIMUM = 220
+STAGE_FIELD_MINIMUMS = {
+    "name": 2,
+    "source_heading": 2,
+    "translation": 40,
+    "explanation": 80,
+    "evidence": 8,
+}
+STAGE_LABELS = ("翻译", "解释")
 ZOTERO_URI = re.compile(r"zotero://open-pdf/library/items/[A-Z0-9]{8}")
 
 
@@ -68,14 +74,18 @@ def section_text(markdown: str, heading: str) -> str:
     return markdown[start : start + match.start()] if match else markdown[start:]
 
 
+def normalize_method_heading(value: str) -> str:
+    value = re.sub(r"^\s*\d+(?:\.\d+)*\s*[-:：.]?\s*", "", value)
+    return re.sub(r"[^\w]+", "", value, flags=re.UNICODE).casefold()
+
+
 def validate_stage(stage: Any, slug: str, index: int) -> None:
     if not isinstance(stage, dict):
         raise RuntimeError(f"{slug}: method_stages[{index}] must be an object")
-    for field in STAGE_FIELDS:
+    for field, minimum in STAGE_FIELD_MINIMUMS.items():
         value = stage.get(field)
-        minimum = 2 if field == "name" else 8
         if not isinstance(value, str) or compact_length(value) < minimum:
-            raise RuntimeError(f"{slug}: method stage {index + 1} has an empty or vague {field}")
+            raise RuntimeError(f"{slug}: Method part {index + 1} has an empty or vague {field}")
 
 
 def validate_paper(
@@ -114,29 +124,37 @@ def validate_paper(
             )
 
     stages = paper.get("method_stages")
-    if not isinstance(stages, list) or len(stages) < 3:
-        raise RuntimeError(f"{slug}: method_stages must contain at least three concrete stages")
+    if not isinstance(stages, list) or not stages:
+        raise RuntimeError(f"{slug}: method_stages must contain one object per actual Method part")
     for index, stage in enumerate(stages):
         validate_stage(stage, slug, index)
-    markdown_stage_count = len(re.findall(r"^###\s*阶段\s*\d+\s*[：:]", markdown, flags=re.MULTILINE))
-    if markdown_stage_count < len(stages) or markdown_stage_count < 3:
-        raise RuntimeError(f"{slug}: Markdown has {markdown_stage_count} stage headings for {len(stages)} JSON stages")
     action = section_text(markdown, ACTION_HEADING)
-    for subsection in ACTION_SUBSECTIONS:
-        if subsection not in action:
-            raise RuntimeError(f"{slug}: Action is missing required subsection {subsection}")
-    for label in STAGE_LABELS:
-        count = len(re.findall(rf"\*\*{re.escape(label)}\*\*\s*[：:]", action))
-        if count < len(stages):
-            raise RuntimeError(
-                f"{slug}: Action contains {count} **{label}** fields for {len(stages)} stages"
-            )
-    required_length = 1000 if paper.get("top_recommendation") else 700
-    if compact_length(action) < required_length:
+    matches = list(METHOD_PART_HEADING.finditer(action))
+    if len(matches) != len(stages):
         raise RuntimeError(
-            f"{slug}: Action has {compact_length(action)} non-space characters; "
-            f"requires {required_length}"
+            f"{slug}: Action has {len(matches)} Method-part headings for "
+            f"{len(stages)} JSON Method parts"
         )
+    numbers = [int(match.group(1)) for match in matches]
+    if numbers != list(range(1, len(stages) + 1)):
+        raise RuntimeError(f"{slug}: Method-part headings must be numbered consecutively from 1")
+    for index, (stage, match) in enumerate(zip(stages, matches)):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(action)
+        block = action[match.end() : end]
+        if compact_length(block) < METHOD_PART_MINIMUM:
+            raise RuntimeError(
+                f"{slug}: Method part {index + 1} has {compact_length(block)} non-space "
+                f"characters; requires {METHOD_PART_MINIMUM}"
+            )
+        markdown_heading = normalize_method_heading(match.group(2))
+        source_heading = normalize_method_heading(str(stage["source_heading"]))
+        if source_heading not in markdown_heading:
+            raise RuntimeError(
+                f"{slug}: Method part {index + 1} heading does not include its original heading"
+            )
+        for label in STAGE_LABELS:
+            if not re.search(rf"\*\*{re.escape(label)}\*\*\s*[：:]", block):
+                raise RuntimeError(f"{slug}: Method part {index + 1} is missing **{label}**")
 
     allowed_figures = {
         str(figure.get("path"))

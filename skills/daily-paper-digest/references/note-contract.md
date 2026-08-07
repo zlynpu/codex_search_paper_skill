@@ -22,7 +22,7 @@ Use these exact headings and order:
 1. `## 一句话总结`
 2. `## S｜Situation：研究情境与具体失败模式`
 3. `## T｜Task：论文要解决的任务与约束`
-4. `## A｜Action：从输入到输出的逐阶段操作链`
+4. `## A｜Action：按论文 Method 逐部分翻译与解释`
 5. `## R｜Result：实验结果、收益与证据`
 6. `## 与我的研究方向的关联`
 7. `## 局限与证据边界`
@@ -34,35 +34,31 @@ STAR is a reasoning contract, not a cosmetic rename. Each part must be independe
 
 - **Situation** (at least 300 non-whitespace characters): define the real research/application setting, relevant data or environment, the precise failure mode, its consequence, and why representative existing approaches do not solve it. Tie the failure to paper evidence rather than giving a generic field introduction.
 - **Task** (at least 220 non-whitespace characters): define the paper's exact input and output, optimization/decision target, key constraints or assumptions, evaluation target, and what is outside scope. Explain what a successful solution must accomplish.
-- **Action** (at least 1,000 non-whitespace characters for a Top recommendation; at least 700 otherwise): explain the actual method stage by stage using the standard below. Include training objectives, rewards, and key equations at the stage where they act, rather than isolating unexplained formulas in a detached section.
+- **Action**: mirror the paper's actual Method structure and translate plus explain every Method part using the standard below. Detail scales with the paper: do not pad a one-part method into three stages or collapse a multi-part method into a short summary.
 - **Result** (at least 300 non-whitespace characters): report the main quantitative and qualitative evidence. Every number must name the dataset/environment, metric and direction, comparison baseline, and experimental condition when available. Include the decisive ablation or failure case, then explain what the evidence establishes and what it does not.
 
 If the source omits a requested detail, explicitly say that the paper does not report it. Never fill a length requirement with repeated background, raw abstract translation, or invented mechanisms.
 
-## Action method-chain standard
+## Action Method-part standard
 
-The Action section must contain at least three numbered `### 阶段 N：...` headings. Use more when the method has more phases; do not compress seed creation, scoring, pruning, refinement, and final selection into one stage. For every stage explain:
+Determine the outline from the paper's Method section before drafting. Map each explicit first-level Method subsection or named method component to one note section, preserving the original order. Use this heading:
 
-- **输入**: exact data/object/state and its representation or shape when stated.
-- **操作**: concrete module, algorithm, sampling/scoring/pruning rule, loss, reward, or update.
-- **输出**: artifact passed downstream.
-- **目的**: why this operation is necessary and which failure mode it fixes.
-- **时机**: whether the operation belongs to data construction, initialization/pretraining, supervised training, post-training/RL, or inference.
-- **证据**: section, figure, table, equation, algorithm, or explicit statement in the source.
+`### 方法部分 N：中文标题（Original Method Heading）`
 
-After the numbered stages, include:
+If Method has one part, write one section. If it has N parts, write N sections. Do not invent, split, or merge parts to satisfy an arbitrary count. Do not count Related Work, Experiments, or Implementation Details as Method parts unless the paper itself places them inside Method as a substantive component.
 
-- `### 训练目标、奖励与关键公式`: write each relevant equation in LaTeX, define its variables, say which parameters it updates, and explain how it changes behavior. If no training is performed, state that and explain the inference-only rule.
-- `### 训练与推理的差异`: list which modules/signals exist only during training and give the exact inference-time path.
-- `### 贯穿全流程的具体样例`: trace one representative input through every stage, naming the intermediate artifacts and final output. Label any constructed illustration as an interpretation rather than a quotation from the paper.
+Every Method part must be at least 220 non-whitespace characters and contain only the two required explanatory blocks:
 
-Do not replace these items with “uses a multi-stage framework”, “improves quality”, or invented pseudo-formulas. Distinguish source facts from interpretation. If details are absent, say so.
+- **翻译**: faithfully translate and restate this Method part in Chinese. Translate its heading and key method content while preserving technical terms, symbols, equations, and stated conditions. Do not copy long passages verbatim.
+- **解释**: explain how this part operates, why it is needed, and how it connects to adjacent parts in language understandable without reading the paper. When present in the source, cover its concrete input, operation, output, objective, formulas/loss/reward, training or inference timing, and downstream interface. Cite the supporting section, figure, table, equation, or algorithm inside this explanation.
 
-Every paper JSON must contain a `method_stages` array with at least three objects using keys `name`, `input`, `operation`, `output`, `purpose`, `timing`, and `evidence`.
+Place each training objective, reward, key equation, and training/inference distinction inside the Method part where it appears. Define variables, state which parameters are updated, and explain the behavioral effect. If a part is inference-only or the paper omits an implementation detail, say so. Do not add detached boilerplate subsections or invented pseudo-formulas.
+
+Every paper JSON must contain a `method_stages` array with exactly one object per Method part, despite the legacy field name. Each object uses keys `name`, `source_heading`, `translation`, `explanation`, and `evidence`. Its length must equal the number of `### 方法部分 N：...` sections in Markdown.
 
 ## Figures
 
-Embed 2–4 original figures selected for explanatory value. Use a relative path such as `images/my-paper/figure-01.png`. Place each figure immediately after the relevant Situation, Action, or Result paragraph, not in a detached gallery. At least one available figure must appear inside Action. Its caption must identify the paper figure number, what the reader should inspect, and which claim or stage it supports. Never claim a rendered PDF page or self-drawn diagram is an original paper figure.
+Embed 2–4 original figures selected for explanatory value. Use a relative path such as `images/my-paper/figure-01.png`. Place each figure immediately after the relevant Situation, Action, or Result paragraph, not in a detached gallery. At least one available figure must appear inside Action. Its caption must identify the paper figure number, what the reader should inspect, and which claim or Method part it supports. Never claim a rendered PDF page or self-drawn diagram is an original paper figure.
 
 ## Evidence and metrics
 

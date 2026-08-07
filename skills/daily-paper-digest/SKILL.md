@@ -44,16 +44,14 @@ If the user requests a configuration change, run `configure.py` first, then rein
    - **Action**: reconstruct the proposed method as an operation chain from actual input/data construction through training or optimization to inference/output. This is the most detailed section.
    - **Result**: report evidence with metric direction, dataset/environment, baseline, and comparison context; include ablations or qualitative findings when available and separate results from interpretation.
 
-5. In **Action**, reconstruct at least three real stages. Every stage must state:
+5. In **Action**, mirror the paper's own Method structure. If Method has N explicit first-level subsections or named components, write exactly N `### 方法部分 N：中文标题（Original Heading）` sections in the same order. If Method is one unified part, write one part. Never split or merge parts merely to reach a target count. For every part:
 
-   - its concrete input and representation;
-   - the operation, module, objective, or update actually applied;
-   - the resulting output passed to the next stage;
-   - why the stage exists and what failure it addresses;
-   - whether it runs during data construction, training, post-training/RL, or inference;
-   - the paper evidence supporting the claim.
+   - write **翻译**: translate the original heading and faithfully restate that Method part in Chinese;
+   - write **解释**: explain in plain language how it works, why it is needed, and how it connects to adjacent parts;
+   - inside the explanation, cover concrete inputs, operations, outputs, formulas, losses, rewards, selection rules, and training/inference timing when the paper states them;
+   - cite the source heading plus the supporting section, figure, table, equation, or algorithm.
 
-   Top recommendations require extra depth. If a paper has multiple phases such as seed generation, scoring, pruning, refinement, and final selection, explain each phase separately, including the decision rule, what is retained or discarded, and how the next phase consumes the result. Also trace one concrete example through the entire chain. Do not merge distinct phases into phrases such as “iteratively improves the seed.”
+   Treat translation as faithful Chinese restatement, not unexplained literal copying. Preserve technical terms and equations, then explain them so a reader can follow the operation without opening the paper. When the paper itself defines separate phases such as seed generation, scoring, pruning, refinement, and final selection, keep those same separate parts; when it groups them under one Method part, preserve that grouping and explain the internal flow there.
 
 6. Use only figures listed in that paper's JSON. Markdown image paths for paper `<slug>` must start with `images/<slug>/`; never reuse another paper's image or move all images into a shared flat namespace. Embed 2–4 semantically necessary original figures unless the source record explicitly records that fewer exist. Put each figure immediately after the STAR claim it explains, with a Chinese caption that says what to inspect and why it supports that claim. At least one available figure must appear inside **Action**; use Result figures for quantitative or qualitative evidence when useful.
 

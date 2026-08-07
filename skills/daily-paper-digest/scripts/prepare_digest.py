@@ -494,13 +494,13 @@ Prepared papers:
 
 {slugs}
 
-Read every `<slug>.json` plus its `source_files`. Write `<slug>.md`, update the JSON analytical fields including at least three concrete `method_stages`, and write `digest.md`.
+Read every `<slug>.json` plus its `source_files`. Write `<slug>.md`, update the JSON analytical fields including `method_stages`, and write `digest.md`.
 
 Every paper note must follow the exact STAR headings in `references/note-contract.md`:
 
 - Situation: research/application setting, concrete failure mode, consequence, and why prior approaches are insufficient.
 - Task: exact input/output, objective, constraints/assumptions, evaluation target, and scope boundary.
-- Action: the most detailed part. Split the real method into numbered stages from data/input to training or optimization and inference/output. For every stage write **输入**, **操作**, **输出**, **目的**, **时机**, and **证据**, and add the same content to `method_stages` using `name`, `input`, `operation`, `output`, `purpose`, `timing`, and `evidence`. Keep seed generation, scoring, pruning, refinement, and final selection separate when present. Explain objectives/equations and variables, distinguish training from inference, and trace one concrete input through all stages.
+- Action: first recover the paper's own Method outline. If Method has N explicit first-level subsections or named components, write exactly N `### 方法部分 N：中文标题（Original Method Heading）` sections in the same order; a one-part Method gets one section. Never split or merge parts to hit a fixed count. For every part write only two required blocks: **翻译** faithfully restates that Method part in Chinese, and **解释** makes its operation understandable. In **解释**, cover inputs, operations, outputs, purpose, equations/objectives/rewards, training/inference timing, interfaces, and paper evidence when applicable. Add exactly one corresponding `method_stages` object using `name`, `source_heading`, `translation`, `explanation`, and `evidence`.
 - Result: metrics with dataset/environment, direction, baseline, and condition; decisive ablations or qualitative evidence; what the evidence proves and does not prove.
 
 Use only each paper's listed `figures`, keeping paths under `images/<slug>/`. Place 2–4 necessary original figures immediately after the relevant STAR explanation, with specific Chinese captions; at least one available figure must appear inside Action. Do not update the history index and do not invent evidence. Finish only after all files are complete; the deterministic verifier runs next.
