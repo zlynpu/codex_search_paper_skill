@@ -148,6 +148,16 @@ class VerificationTests(unittest.TestCase):
                     "translation": "论文把候选种子的评分、保留、丢弃与后续精炼定义为一个统一的方法部分，并明确各操作的先后关系。",
                     "explanation": "通俗地说，这一部分像一条带质量门控的流水线：候选种子和任务上下文先按论文阈值评分，低质量项被丢弃，保留项再精炼成下游训练样本。它发生在数据构造和训练准备阶段，推理时不再执行，并通过原文算法与图表给出依据。",
                     "evidence": "Method section Seed Selection and Refinement, algorithm and figure",
+                    "equations": [
+                        {
+                            "latex": "q_i = s_i / (1 + s_i)",
+                            "variables": "q_i is the bounded quality and s_i is the raw candidate score",
+                            "role": "the bounded score determines whether a candidate passes the training-data gate",
+                            "intuition": "large raw scores approach one while weak candidates remain below the threshold",
+                            "evidence": "Method equation 1",
+                        }
+                    ],
+                    "equation_note": "",
                 }
             ]
             paper = {
@@ -181,6 +191,9 @@ class VerificationTests(unittest.TestCase):
                 "可直接供下游训练消费的候选集合。该操作发生在数据构造与训练准备阶段，推理时不再执行；"
                 "它的作用是在进入下游优化前阻断低质量候选造成的错误累积。证据来自 Method 小节 "
                 "Seed Selection and Refinement、对应算法与 Figure 1。"
+                "**公式与直觉**：论文用 $q_i=s_i/(1+s_i)$ 把原始候选分数 $s_i$ 压到有界质量分数 $q_i$。"
+                "$s_i$ 越大，$q_i$ 越接近 1，但不会无限增长；训练数据门根据 $q_i$ 与阈值的比较决定保留或丢弃。"
+                "直观上，它像把不同量纲的原始成绩换算成统一百分制，避免极端大值垄断筛选结果。"
                 + "这一部分继续解释具体计算、保留条件、丢弃条件以及下游如何消费输出。" * 10
             )
             situation = (
@@ -208,7 +221,7 @@ class VerificationTests(unittest.TestCase):
 {situation}
 ## T｜Task：论文要解决的任务与约束
 {task}
-## A｜Action：按论文 Method 逐部分翻译与解释
+## A｜Action：按论文 Method 逐部分翻译、解释与公式直觉
 {core}
 ![图 1：候选种子从生成、评分到筛选的完整方法链路](images/seed-paper/figure-01.png)
 ## R｜Result：实验结果、收益与证据
@@ -239,6 +252,12 @@ Abstract.
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(RuntimeError, "Situation"):
+                verify(config, config_path, run_date)
+            (day / "seed-paper.md").write_text(
+                note.replace("**公式与直觉**", "**公式说明**"),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "公式与直觉"):
                 verify(config, config_path, run_date)
             extra_part = (
                 "### 方法部分 2：虚构步骤（Invented Step）\n\n"

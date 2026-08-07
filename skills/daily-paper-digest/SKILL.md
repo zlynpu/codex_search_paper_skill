@@ -48,7 +48,8 @@ If the user requests a configuration change, run `configure.py` first, then rein
 
    - write **翻译**: translate the original heading and faithfully restate that Method part in Chinese;
    - write **解释**: explain in plain language how it works, why it is needed, and how it connects to adjacent parts;
-   - inside the explanation, cover concrete inputs, operations, outputs, formulas, losses, rewards, selection rules, and training/inference timing when the paper states them;
+   - write **公式与直觉**: preserve every necessary formula from that part, define every variable, explain the calculation and its optimization/inference role, then give a plain-language intuition; if the part has no key formula, explicitly say so instead of inventing one;
+   - inside the explanation, cover concrete inputs, operations, outputs, losses, rewards, selection rules, and training/inference timing when the paper states them;
    - cite the source heading plus the supporting section, figure, table, equation, or algorithm.
 
    Treat translation as faithful Chinese restatement, not unexplained literal copying. Preserve technical terms and equations, then explain them so a reader can follow the operation without opening the paper. When the paper itself defines separate phases such as seed generation, scoring, pruning, refinement, and final selection, keep those same separate parts; when it groups them under one Method part, preserve that grouping and explain the internal flow there.

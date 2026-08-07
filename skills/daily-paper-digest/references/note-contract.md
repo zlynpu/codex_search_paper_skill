@@ -22,7 +22,7 @@ Use these exact headings and order:
 1. `## 一句话总结`
 2. `## S｜Situation：研究情境与具体失败模式`
 3. `## T｜Task：论文要解决的任务与约束`
-4. `## A｜Action：按论文 Method 逐部分翻译与解释`
+4. `## A｜Action：按论文 Method 逐部分翻译、解释与公式直觉`
 5. `## R｜Result：实验结果、收益与证据`
 6. `## 与我的研究方向的关联`
 7. `## 局限与证据边界`
@@ -47,14 +47,15 @@ Determine the outline from the paper's Method section before drafting. Map each 
 
 If Method has one part, write one section. If it has N parts, write N sections. Do not invent, split, or merge parts to satisfy an arbitrary count. Do not count Related Work, Experiments, or Implementation Details as Method parts unless the paper itself places them inside Method as a substantive component.
 
-Every Method part must be at least 220 non-whitespace characters and contain only the two required explanatory blocks:
+Every Method part must be at least 220 non-whitespace characters and contain three required blocks:
 
 - **翻译**: faithfully translate and restate this Method part in Chinese. Translate its heading and key method content while preserving technical terms, symbols, equations, and stated conditions. Do not copy long passages verbatim.
 - **解释**: explain how this part operates, why it is needed, and how it connects to adjacent parts in language understandable without reading the paper. When present in the source, cover its concrete input, operation, output, objective, formulas/loss/reward, training or inference timing, and downstream interface. Cite the supporting section, figure, table, equation, or algorithm inside this explanation.
+- **公式与直觉**: include every formula needed to understand or reproduce this Method part. Render it in LaTeX, define every variable, explain the calculation order, state which parameters or decisions it affects, and add a concrete plain-language intuition. If the Method part has no key formula, write `本部分无关键公式` and explain the non-mathematical rule; never invent a formula for completeness.
 
 Place each training objective, reward, key equation, and training/inference distinction inside the Method part where it appears. Define variables, state which parameters are updated, and explain the behavioral effect. If a part is inference-only or the paper omits an implementation detail, say so. Do not add detached boilerplate subsections or invented pseudo-formulas.
 
-Every paper JSON must contain a `method_stages` array with exactly one object per Method part, despite the legacy field name. Each object uses keys `name`, `source_heading`, `translation`, `explanation`, and `evidence`. Its length must equal the number of `### 方法部分 N：...` sections in Markdown.
+Every paper JSON must contain a `method_stages` array with exactly one object per Method part, despite the legacy field name. Each object uses keys `name`, `source_heading`, `translation`, `explanation`, `evidence`, `equations`, and `equation_note`. `equations` is an array of objects with `latex`, `variables`, `role`, `intuition`, and `evidence`; use an empty array only when no key formula exists, and explain why in `equation_note`. The array length must equal the number of `### 方法部分 N：...` sections in Markdown.
 
 ## Figures
 

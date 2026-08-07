@@ -33,7 +33,7 @@ REQUIRED_SECTIONS = (
     "## 一句话总结",
     "## S｜Situation：研究情境与具体失败模式",
     "## T｜Task：论文要解决的任务与约束",
-    "## A｜Action：按论文 Method 逐部分翻译与解释",
+    "## A｜Action：按论文 Method 逐部分翻译、解释与公式直觉",
     "## R｜Result：实验结果、收益与证据",
     "## 与我的研究方向的关联",
     "## 局限与证据边界",
@@ -44,7 +44,7 @@ STAR_MINIMUMS = {
     "## T｜Task：论文要解决的任务与约束": 220,
     "## R｜Result：实验结果、收益与证据": 300,
 }
-ACTION_HEADING = "## A｜Action：按论文 Method 逐部分翻译与解释"
+ACTION_HEADING = "## A｜Action：按论文 Method 逐部分翻译、解释与公式直觉"
 METHOD_PART_HEADING = re.compile(
     r"^###\s*方法部分\s*(\d+)\s*[：:]\s*(.+)$",
     flags=re.MULTILINE,
@@ -57,7 +57,14 @@ STAGE_FIELD_MINIMUMS = {
     "explanation": 80,
     "evidence": 8,
 }
-STAGE_LABELS = ("翻译", "解释")
+STAGE_LABELS = ("翻译", "解释", "公式与直觉")
+EQUATION_FIELD_MINIMUMS = {
+    "latex": 3,
+    "variables": 20,
+    "role": 20,
+    "intuition": 20,
+    "evidence": 4,
+}
 ZOTERO_URI = re.compile(r"zotero://open-pdf/library/items/[A-Z0-9]{8}")
 
 
@@ -79,6 +86,15 @@ def normalize_method_heading(value: str) -> str:
     return re.sub(r"[^\w]+", "", value, flags=re.UNICODE).casefold()
 
 
+def labeled_text(block: str, label: str) -> str:
+    match = re.search(rf"\*\*{re.escape(label)}\*\*\s*[：:]", block)
+    if not match:
+        return ""
+    remaining = block[match.end() :]
+    next_label = re.search(r"\*\*[^*]+\*\*\s*[：:]", remaining)
+    return remaining[: next_label.start()] if next_label else remaining
+
+
 def validate_stage(stage: Any, slug: str, index: int) -> None:
     if not isinstance(stage, dict):
         raise RuntimeError(f"{slug}: method_stages[{index}] must be an object")
@@ -86,6 +102,30 @@ def validate_stage(stage: Any, slug: str, index: int) -> None:
         value = stage.get(field)
         if not isinstance(value, str) or compact_length(value) < minimum:
             raise RuntimeError(f"{slug}: Method part {index + 1} has an empty or vague {field}")
+    equations = stage.get("equations")
+    if not isinstance(equations, list):
+        raise RuntimeError(f"{slug}: Method part {index + 1} equations must be an array")
+    if not isinstance(stage.get("equation_note"), str):
+        raise RuntimeError(f"{slug}: Method part {index + 1} equation_note must be a string")
+    if equations:
+        for equation_index, equation in enumerate(equations):
+            if not isinstance(equation, dict):
+                raise RuntimeError(
+                    f"{slug}: Method part {index + 1} equation {equation_index + 1} must be an object"
+                )
+            for field, minimum in EQUATION_FIELD_MINIMUMS.items():
+                value = equation.get(field)
+                if not isinstance(value, str) or compact_length(value) < minimum:
+                    raise RuntimeError(
+                        f"{slug}: Method part {index + 1} equation {equation_index + 1} "
+                        f"has an empty or vague {field}"
+                    )
+    else:
+        note = stage.get("equation_note")
+        if not isinstance(note, str) or compact_length(note) < 8:
+            raise RuntimeError(
+                f"{slug}: Method part {index + 1} has no equations and lacks equation_note"
+            )
 
 
 def validate_paper(
@@ -155,6 +195,16 @@ def validate_paper(
         for label in STAGE_LABELS:
             if not re.search(rf"\*\*{re.escape(label)}\*\*\s*[：:]", block):
                 raise RuntimeError(f"{slug}: Method part {index + 1} is missing **{label}**")
+        formula_text = labeled_text(block, "公式与直觉")
+        if stage["equations"]:
+            if "$" not in formula_text or compact_length(formula_text) < 80:
+                raise RuntimeError(
+                    f"{slug}: Method part {index + 1} must render and explain its equations"
+                )
+        elif not re.search(r"无关键公式|没有关键公式|不适用|论文未给出", formula_text):
+            raise RuntimeError(
+                f"{slug}: Method part {index + 1} must explicitly state that no key formula exists"
+            )
 
     allowed_figures = {
         str(figure.get("path"))
