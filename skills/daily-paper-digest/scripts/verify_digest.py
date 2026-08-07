@@ -57,7 +57,11 @@ STAGE_FIELD_MINIMUMS = {
     "explanation": 80,
     "evidence": 8,
 }
-STAGE_LABELS = ("翻译", "解释", "公式与直觉")
+FORMULA_HEADING = re.compile(r"^####\s*必要公式与直觉\s*$", flags=re.MULTILINE)
+FORBIDDEN_ROLE_LABEL = re.compile(
+    r"^\s*(?:\*\*)?(?:翻译|解释)(?:\*\*)?\s*[：:]",
+    flags=re.MULTILINE,
+)
 EQUATION_FIELD_MINIMUMS = {
     "latex": 3,
     "variables": 20,
@@ -86,13 +90,49 @@ def normalize_method_heading(value: str) -> str:
     return re.sub(r"[^\w]+", "", value, flags=re.UNICODE).casefold()
 
 
-def labeled_text(block: str, label: str) -> str:
-    match = re.search(rf"\*\*{re.escape(label)}\*\*\s*[：:]", block)
-    if not match:
+def italic_paragraph_text(value: str) -> str:
+    value = value.strip()
+    if value.startswith("**") or not (value.startswith("*") and value.endswith("*")):
         return ""
-    remaining = block[match.end() :]
-    next_label = re.search(r"\*\*[^*]+\*\*\s*[：:]", remaining)
-    return remaining[: next_label.start()] if next_label else remaining
+    return value[1:-1].strip()
+
+
+def validate_translation_explanation_pairs(block: str, slug: str, index: int) -> re.Match[str]:
+    if FORBIDDEN_ROLE_LABEL.search(block):
+        raise RuntimeError(
+            f"{slug}: Method part {index + 1} must not use 翻译： or 解释： labels"
+        )
+    formula_matches = list(FORMULA_HEADING.finditer(block))
+    if len(formula_matches) != 1:
+        raise RuntimeError(
+            f"{slug}: Method part {index + 1} must contain one #### 必要公式与直觉 heading"
+        )
+    prose = block[: formula_matches[0].start()].strip()
+    paragraphs = [
+        paragraph.strip()
+        for paragraph in re.split(r"\n[ \t]*\n", prose)
+        if paragraph.strip()
+    ]
+    if len(paragraphs) < 2 or len(paragraphs) % 2:
+        raise RuntimeError(
+            f"{slug}: Method part {index + 1} must pair every body translation "
+            "paragraph with an immediately following italic explanation"
+        )
+    for pair_index in range(0, len(paragraphs), 2):
+        translation = paragraphs[pair_index]
+        explanation = italic_paragraph_text(paragraphs[pair_index + 1])
+        if translation.startswith(("*", "_", "#", "!", "```", "$$")) or compact_length(translation) < 40:
+            raise RuntimeError(
+                f"{slug}: Method part {index + 1} translation paragraph "
+                f"{pair_index // 2 + 1} must be unlabeled regular body text"
+            )
+        if compact_length(explanation) < 80:
+            raise RuntimeError(
+                f"{slug}: Method part {index + 1} paragraph pair "
+                f"{pair_index // 2 + 1} must end with an immediately following "
+                "whole-paragraph italic explanation"
+            )
+    return formula_matches[0]
 
 
 def validate_stage(stage: Any, slug: str, index: int) -> None:
@@ -192,10 +232,8 @@ def validate_paper(
             raise RuntimeError(
                 f"{slug}: Method part {index + 1} heading does not include its original heading"
             )
-        for label in STAGE_LABELS:
-            if not re.search(rf"\*\*{re.escape(label)}\*\*\s*[：:]", block):
-                raise RuntimeError(f"{slug}: Method part {index + 1} is missing **{label}**")
-        formula_text = labeled_text(block, "公式与直觉")
+        formula_heading = validate_translation_explanation_pairs(block, slug, index)
+        formula_text = block[formula_heading.end() :]
         if stage["equations"]:
             if "$" not in formula_text or compact_length(formula_text) < 80:
                 raise RuntimeError(

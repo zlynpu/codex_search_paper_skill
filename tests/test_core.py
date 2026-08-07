@@ -184,17 +184,19 @@ class VerificationTests(unittest.TestCase):
             atomic_write_json(day / "seed-paper.json", paper)
             core = (
                 "### 方法部分 1：种子筛选与精炼（Seed Selection and Refinement）\n\n"
-                "**翻译**：论文将候选种子的评分、保留、丢弃和后续精炼放在同一个 Method 小节中，"
-                "并按原文顺序说明质量门控与下游接口。"
-                "**解释**：可以把它理解为一条带质检的流水线。输入是候选种子、任务上下文及其分数表示；"
+                "论文将候选种子的评分、保留、丢弃和后续精炼放在同一个 Method 小节中，"
+                "并按原文顺序说明质量门控与下游接口。\n\n"
+                "*可以把它理解为一条带质检的流水线。输入是候选种子、任务上下文及其分数表示；"
                 "系统依据论文给定的阈值和目标函数逐项评分、筛选，再对保留项执行精炼。输出是带来源与评分标记、"
                 "可直接供下游训练消费的候选集合。该操作发生在数据构造与训练准备阶段，推理时不再执行；"
                 "它的作用是在进入下游优化前阻断低质量候选造成的错误累积。证据来自 Method 小节 "
-                "Seed Selection and Refinement、对应算法与 Figure 1。"
-                "**公式与直觉**：论文用 $q_i=s_i/(1+s_i)$ 把原始候选分数 $s_i$ 压到有界质量分数 $q_i$。"
-                "$s_i$ 越大，$q_i$ 越接近 1，但不会无限增长；训练数据门根据 $q_i$ 与阈值的比较决定保留或丢弃。"
+                "Seed Selection and Refinement、对应算法与 Figure 1。*\n\n"
+                "#### 必要公式与直觉\n\n"
+                "论文用 $q_i=s_i/(1+s_i)$ 把原始候选分数 $s_i$ 压到有界质量分数 $q_i$。\n\n"
+                "*$s_i$ 越大，$q_i$ 越接近 1，但不会无限增长；训练数据门根据 $q_i$ 与阈值的比较决定保留或丢弃。"
                 "直观上，它像把不同量纲的原始成绩换算成统一百分制，避免极端大值垄断筛选结果。"
                 + "这一部分继续解释具体计算、保留条件、丢弃条件以及下游如何消费输出。" * 10
+                + "*"
             )
             situation = (
                 "论文研究候选种子经过多阶段筛选后用于下游训练的场景。原始候选在正确性、覆盖度和难度上分布不均，"
@@ -254,15 +256,30 @@ Abstract.
             with self.assertRaisesRegex(RuntimeError, "Situation"):
                 verify(config, config_path, run_date)
             (day / "seed-paper.md").write_text(
-                note.replace("**公式与直觉**", "**公式说明**"),
+                note.replace("#### 必要公式与直觉", "#### 公式说明"),
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(RuntimeError, "公式与直觉"):
+            with self.assertRaisesRegex(RuntimeError, "必要公式与直觉"):
+                verify(config, config_path, run_date)
+            (day / "seed-paper.md").write_text(
+                note.replace("论文将候选种子", "翻译：论文将候选种子", 1),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "must not use"):
+                verify(config, config_path, run_date)
+            (day / "seed-paper.md").write_text(
+                note.replace("*可以把它理解", "可以把它理解", 1).replace(
+                    "Figure 1。*", "Figure 1。", 1
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "italic explanation"):
                 verify(config, config_path, run_date)
             extra_part = (
                 "### 方法部分 2：虚构步骤（Invented Step）\n\n"
-                "**翻译**：这个部分并不存在于论文 Method 中。\n"
-                "**解释**：验证器应拒绝 Markdown 与 JSON 方法部分数量不一致。\n"
+                "这个部分并不存在于论文 Method 中。\n\n"
+                "*验证器应拒绝 Markdown 与 JSON 方法部分数量不一致。*\n\n"
+                "#### 必要公式与直觉\n\n本部分无关键公式。\n"
             )
             (day / "seed-paper.md").write_text(
                 note.replace("## R｜Result：实验结果、收益与证据", extra_part + "## R｜Result：实验结果、收益与证据"),

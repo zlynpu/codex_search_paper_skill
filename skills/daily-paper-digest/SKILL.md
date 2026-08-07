@@ -46,9 +46,9 @@ If the user requests a configuration change, run `configure.py` first, then rein
 
 5. In **Action**, mirror the paper's own Method structure. If Method has N explicit first-level subsections or named components, write exactly N `### 方法部分 N：中文标题（Original Heading）` sections in the same order. If Method is one unified part, write one part. Never split or merge parts merely to reach a target count. For every part:
 
-   - write **翻译**: translate the original heading and faithfully restate that Method part in Chinese;
-   - write **解释**: explain in plain language how it works, why it is needed, and how it connects to adjacent parts;
-   - write **公式与直觉**: preserve every necessary formula from that part, define every variable, explain the calculation and its optimization/inference role, then give a plain-language intuition; if the part has no key formula, explicitly say so instead of inventing one;
+   - write each faithful Chinese translation/restatement as an unlabeled regular body paragraph; never prefix it with `翻译：` or a bold translation label;
+   - immediately follow every translated/restated paragraph with a whole-paragraph italic explanation of how it works, why it is needed, and how it connects to adjacent parts; never prefix it with `解释：` or a bold explanation label;
+   - add one `#### 必要公式与直觉` subsection, preserve every necessary formula from that part, define every variable, explain the calculation and its optimization/inference role, then give a plain-language intuition; if the part has no key formula, explicitly say so instead of inventing one;
    - inside the explanation, cover concrete inputs, operations, outputs, losses, rewards, selection rules, and training/inference timing when the paper states them;
    - cite the source heading plus the supporting section, figure, table, equation, or algorithm.
 
