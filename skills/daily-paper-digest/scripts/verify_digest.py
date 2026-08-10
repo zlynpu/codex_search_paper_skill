@@ -33,7 +33,7 @@ REQUIRED_SECTIONS = (
     "## 一句话总结",
     "## S｜Situation：研究情境与具体失败模式",
     "## T｜Task：论文要解决的任务与约束",
-    "## A｜Action：按论文 Method 逐部分翻译、解释与公式直觉",
+    "## A｜Action：把论文方法完整走一遍",
     "## R｜Result：实验结果、收益与证据",
     "## 与我的研究方向的关联",
     "## 局限与证据边界",
@@ -44,23 +44,42 @@ STAR_MINIMUMS = {
     "## T｜Task：论文要解决的任务与约束": 220,
     "## R｜Result：实验结果、收益与证据": 300,
 }
-ACTION_HEADING = "## A｜Action：按论文 Method 逐部分翻译、解释与公式直觉"
+ACTION_HEADING = "## A｜Action：把论文方法完整走一遍"
 METHOD_PART_HEADING = re.compile(
     r"^###\s*方法部分\s*(\d+)\s*[：:]\s*(.+)$",
     flags=re.MULTILINE,
 )
-METHOD_PART_MINIMUM = 220
+ACTION_INTRO_MINIMUM = 300
+METHOD_PART_MINIMUM = 700
+SUBMODULE_HEADING = re.compile(r"^####\s+(.+)$", flags=re.MULTILINE)
+SUBMODULE_MINIMUM = 300
 STAGE_FIELD_MINIMUMS = {
     "name": 2,
     "source_heading": 2,
     "translation": 40,
     "explanation": 80,
+    "overview": 25,
+    "walkthrough": 120,
     "evidence": 8,
 }
-FORMULA_HEADING = re.compile(r"^####\s*必要公式与直觉\s*$", flags=re.MULTILINE)
+SUBMODULE_FIELD_MINIMUMS = {
+    "name": 2,
+    "source_heading": 2,
+    "input": 20,
+    "output": 20,
+    "purpose": 30,
+    "evidence": 8,
+}
 FORBIDDEN_ROLE_LABEL = re.compile(
     r"^\s*(?:\*\*)?(?:翻译|解释)(?:\*\*)?\s*[：:]",
     flags=re.MULTILINE,
+)
+GENERIC_METHOD_PATTERNS = (
+    re.compile(r"原文的.+部分把该组件放在完整流水线中的对应位置"),
+    re.compile(r"其输入延续自上一部分提供的数据、状态或中间表示"),
+    re.compile(r"输出则作为下一部分训练目标、条件表示或推理接口"),
+    re.compile(r"先把上游给出的信息整理成该模块真正需要的形式"),
+    re.compile(r"通俗地说，这一步是在解决.+这一局部瓶颈"),
 )
 EQUATION_FIELD_MINIMUMS = {
     "latex": 3,
@@ -90,49 +109,22 @@ def normalize_method_heading(value: str) -> str:
     return re.sub(r"[^\w]+", "", value, flags=re.UNICODE).casefold()
 
 
-def italic_paragraph_text(value: str) -> str:
-    value = value.strip()
-    if value.startswith("**") or not (value.startswith("*") and value.endswith("*")):
-        return ""
-    return value[1:-1].strip()
-
-
-def validate_translation_explanation_pairs(block: str, slug: str, index: int) -> re.Match[str]:
-    if FORBIDDEN_ROLE_LABEL.search(block):
-        raise RuntimeError(
-            f"{slug}: Method part {index + 1} must not use 翻译： or 解释： labels"
-        )
-    formula_matches = list(FORMULA_HEADING.finditer(block))
-    if len(formula_matches) != 1:
-        raise RuntimeError(
-            f"{slug}: Method part {index + 1} must contain one #### 必要公式与直觉 heading"
-        )
-    prose = block[: formula_matches[0].start()].strip()
-    paragraphs = [
-        paragraph.strip()
-        for paragraph in re.split(r"\n[ \t]*\n", prose)
-        if paragraph.strip()
-    ]
-    if len(paragraphs) < 2 or len(paragraphs) % 2:
-        raise RuntimeError(
-            f"{slug}: Method part {index + 1} must pair every body translation "
-            "paragraph with an immediately following italic explanation"
-        )
-    for pair_index in range(0, len(paragraphs), 2):
-        translation = paragraphs[pair_index]
-        explanation = italic_paragraph_text(paragraphs[pair_index + 1])
-        if translation.startswith(("*", "_", "#", "!", "```", "$$")) or compact_length(translation) < 40:
+def validate_submodule(submodule: Any, slug: str, stage_index: int, submodule_index: int) -> None:
+    label = f"{slug}: Method part {stage_index + 1} submodule {submodule_index + 1}"
+    if not isinstance(submodule, dict):
+        raise RuntimeError(f"{label} must be an object")
+    for field, minimum in SUBMODULE_FIELD_MINIMUMS.items():
+        value = submodule.get(field)
+        if not isinstance(value, str) or compact_length(value) < minimum:
+            raise RuntimeError(f"{label} has an empty or vague {field}")
+    operations = submodule.get("operations")
+    if not isinstance(operations, list) or len(operations) < 2:
+        raise RuntimeError(f"{label} operations must contain at least two ordered steps")
+    for operation_index, operation in enumerate(operations):
+        if not isinstance(operation, str) or compact_length(operation) < 15:
             raise RuntimeError(
-                f"{slug}: Method part {index + 1} translation paragraph "
-                f"{pair_index // 2 + 1} must be unlabeled regular body text"
+                f"{label} operation {operation_index + 1} is empty or too vague"
             )
-        if compact_length(explanation) < 80:
-            raise RuntimeError(
-                f"{slug}: Method part {index + 1} paragraph pair "
-                f"{pair_index // 2 + 1} must end with an immediately following "
-                "whole-paragraph italic explanation"
-            )
-    return formula_matches[0]
 
 
 def validate_stage(stage: Any, slug: str, index: int) -> None:
@@ -142,6 +134,13 @@ def validate_stage(stage: Any, slug: str, index: int) -> None:
         value = stage.get(field)
         if not isinstance(value, str) or compact_length(value) < minimum:
             raise RuntimeError(f"{slug}: Method part {index + 1} has an empty or vague {field}")
+    submodules = stage.get("submodules")
+    if not isinstance(submodules, list) or not submodules:
+        raise RuntimeError(
+            f"{slug}: Method part {index + 1} must enumerate every nested submodule"
+        )
+    for submodule_index, submodule in enumerate(submodules):
+        validate_submodule(submodule, slug, index, submodule_index)
     equations = stage.get("equations")
     if not isinstance(equations, list):
         raise RuntimeError(f"{slug}: Method part {index + 1} equations must be an array")
@@ -218,6 +217,10 @@ def validate_paper(
     numbers = [int(match.group(1)) for match in matches]
     if numbers != list(range(1, len(stages) + 1)):
         raise RuntimeError(f"{slug}: Method-part headings must be numbered consecutively from 1")
+    if compact_length(action[: matches[0].start()]) < ACTION_INTRO_MINIMUM:
+        raise RuntimeError(
+            f"{slug}: Action must begin with a concrete end-to-end workflow and running example"
+        )
     for index, (stage, match) in enumerate(zip(stages, matches)):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(action)
         block = action[match.end() : end]
@@ -232,17 +235,60 @@ def validate_paper(
             raise RuntimeError(
                 f"{slug}: Method part {index + 1} heading does not include its original heading"
             )
-        formula_heading = validate_translation_explanation_pairs(block, slug, index)
-        formula_text = block[formula_heading.end() :]
-        if stage["equations"]:
-            if "$" not in formula_text or compact_length(formula_text) < 80:
-                raise RuntimeError(
-                    f"{slug}: Method part {index + 1} must render and explain its equations"
-                )
-        elif not re.search(r"无关键公式|没有关键公式|不适用|论文未给出", formula_text):
+        if FORBIDDEN_ROLE_LABEL.search(block):
             raise RuntimeError(
-                f"{slug}: Method part {index + 1} must explicitly state that no key formula exists"
+                f"{slug}: Method part {index + 1} must not use 翻译： or 解释： labels"
             )
+        for pattern in GENERIC_METHOD_PATTERNS:
+            if pattern.search(block):
+                raise RuntimeError(
+                    f"{slug}: Method part {index + 1} contains generic method filler"
+                )
+        submodules = stage["submodules"]
+        submodule_matches = list(SUBMODULE_HEADING.finditer(block))
+        if len(submodule_matches) != len(submodules):
+            raise RuntimeError(
+                f"{slug}: Method part {index + 1} has {len(submodule_matches)} submodule "
+                f"headings for {len(submodules)} JSON submodules"
+            )
+        for submodule_index, (submodule, submodule_match) in enumerate(
+            zip(submodules, submodule_matches)
+        ):
+            markdown_submodule = normalize_method_heading(submodule_match.group(1))
+            expected_submodule = normalize_method_heading(str(submodule["name"]))
+            if expected_submodule not in markdown_submodule:
+                raise RuntimeError(
+                    f"{slug}: Method part {index + 1} submodule {submodule_index + 1} "
+                    "heading does not match its JSON name"
+                )
+            content_start = submodule_match.end()
+            next_heading = re.search(
+                r"^#{3,4}\s+", block[content_start:], flags=re.MULTILINE
+            )
+            content_end = (
+                content_start + next_heading.start() if next_heading else len(block)
+            )
+            submodule_text = block[content_start:content_end]
+            if compact_length(submodule_text) < SUBMODULE_MINIMUM:
+                raise RuntimeError(
+                    f"{slug}: Method part {index + 1} submodule {submodule_index + 1} "
+                    f"has {compact_length(submodule_text)} non-space characters; "
+                    f"requires {SUBMODULE_MINIMUM}"
+                )
+            if not re.search(
+                r"例如|举例|为例|例子|具体|案例|figure|case",
+                submodule_text,
+                re.IGNORECASE,
+            ):
+                raise RuntimeError(
+                    f"{slug}: Method part {index + 1} submodule {submodule_index + 1} "
+                    "does not continue a concrete example"
+                )
+        if stage["equations"]:
+            if "$" not in block or compact_length(block) < 800:
+                raise RuntimeError(
+                    f"{slug}: Method part {index + 1} must integrate and explain its equations"
+                )
 
     allowed_figures = {
         str(figure.get("path"))

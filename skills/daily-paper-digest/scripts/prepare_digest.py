@@ -10,6 +10,7 @@ import http.client
 import json
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -46,18 +47,49 @@ ARXIV_ID_RE = re.compile(r"(?:abs/|pdf/)?(\d{4}\.\d{4,5})(?:v\d+)?", re.I)
 def fetch_bytes(url: str, *, timeout: float = 60, attempts: int = 3) -> tuple[bytes, str]:
     last_error: Exception | None = None
     for attempt in range(attempts):
-        request = urllib.request.Request(
-            url,
-            headers={"User-Agent": USER_AGENT, "Accept": "*/*"},
-        )
         try:
+            curl = shutil.which("curl")
+            if curl:
+                result = subprocess.run(
+                    [
+                        curl,
+                        "--fail",
+                        "--location",
+                        "--silent",
+                        "--show-error",
+                        "--max-time",
+                        str(max(1, int(timeout))),
+                        "--speed-time",
+                        "10",
+                        "--speed-limit",
+                        "1024",
+                        "--user-agent",
+                        USER_AGENT,
+                        url,
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=timeout + 5,
+                )
+                return result.stdout, ""
+            request = urllib.request.Request(
+                url,
+                headers={"User-Agent": USER_AGENT, "Accept": "*/*"},
+            )
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 try:
                     body = response.read()
                 except http.client.IncompleteRead as exc:
                     body = exc.partial
                 return body, response.headers.get_content_type()
-        except (OSError, urllib.error.URLError, urllib.error.HTTPError) as exc:
+        except (
+            OSError,
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+            urllib.error.URLError,
+            urllib.error.HTTPError,
+        ) as exc:
             last_error = exc
             if attempt + 1 < attempts:
                 time.sleep(2 ** attempt * 3)
@@ -214,7 +246,7 @@ def discover(config: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[st
         )
         api_url = f"https://export.arxiv.org/api/query?{query}"
         try:
-            body, _ = fetch_bytes(api_url)
+            body, _ = fetch_bytes(api_url, timeout=12, attempts=1)
             parsed = parse_atom(body, source)
             if not parsed:
                 raise RuntimeError("arXiv API returned no entries")
@@ -224,7 +256,7 @@ def discover(config: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[st
             fallback_records: list[dict[str, Any]] = []
             fallback_errors: list[str] = []
             try:
-                body, _ = fetch_bytes(rss_url)
+                body, _ = fetch_bytes(rss_url, timeout=12, attempts=1)
                 parsed = parse_rss(body, source)
                 if not parsed:
                     raise RuntimeError("arXiv RSS returned no entries")
@@ -233,7 +265,7 @@ def discover(config: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[st
                 fallback_errors.append(f"RSS: {rss_error}")
             listing_url = f"https://arxiv.org/list/{source}/recent?skip=0&show={max_results}"
             try:
-                body, _ = fetch_bytes(listing_url)
+                body, _ = fetch_bytes(listing_url, timeout=12, attempts=1)
                 parsed = parse_recent_html(body, source)
                 if not parsed:
                     raise RuntimeError("arXiv recent HTML returned no entries")
@@ -349,7 +381,7 @@ def extension_for(body: bytes, content_type: str, url: str) -> str:
 
 def enrich_metadata(record: dict[str, Any]) -> tuple[dict[str, Any], str]:
     identifier = normalize_arxiv_id(str(record["arxiv_id"]))
-    body, _ = fetch_bytes(f"https://arxiv.org/abs/{identifier}")
+    body, _ = fetch_bytes(f"https://arxiv.org/abs/{identifier}", timeout=15, attempts=1)
     page = body.decode("utf-8", errors="replace")
     meta = meta_values(page)
     enriched = dict(record)
@@ -389,15 +421,15 @@ def materialize(
     html_url = ""
     html_errors: list[str] = []
     for url in (
-        f"https://arxiv.org/html/{identifier}v1",
         f"https://arxiv.org/html/{identifier}",
         f"https://ar5iv.labs.arxiv.org/html/{identifier}",
     ):
         try:
-            body, content_type = fetch_bytes(url, timeout=90, attempts=2)
+            body, content_type = fetch_bytes(url, timeout=10, attempts=1)
             candidate = body.decode("utf-8", errors="replace")
-            if "<html" not in candidate[:2000].casefold() and "html" not in content_type:
-                raise RuntimeError(f"unexpected content type {content_type}")
+            lowered = candidate.casefold()
+            if "ltx_document" not in lowered and "<article" not in lowered:
+                raise RuntimeError("endpoint returned an abstract/placeholder page, not converted paper HTML")
             html_page, html_url = candidate, url
             break
         except Exception as exc:
@@ -406,25 +438,22 @@ def materialize(
         atomic_write_text(source_dir / "paper.html", html_page)
         atomic_write_text(source_dir / "full-text.txt", text_from_html(html_page))
 
-    pdf_error = ""
-    try:
-        pdf, _ = fetch_bytes(str(enriched["pdf_url"]), timeout=120, attempts=2)
-        if not pdf.startswith(b"%PDF"):
-            raise RuntimeError("download is not a PDF")
-        (source_dir / "paper.pdf").write_bytes(pdf)
-    except Exception as exc:
-        pdf_error = str(exc)
-    if pdf_error and config["zotero"].get("enabled"):
-        raise RuntimeError(f"PDF is required for enabled Zotero integration: {pdf_error}")
+    # arXiv's PDF stream can continue yielding tiny chunks indefinitely, which
+    # defeats socket read timeouts.  Full text and original figures come from
+    # official HTML here; Zotero imports the official PDF URL later and the
+    # final verifier requires a real PDF attachment deep link.
+    pdf_error = "deferred to Zotero bridge after official HTML extraction"
 
     maximum = int(config["selection"]["maximum_original_figures"])
     figures: list[dict[str, str]] = []
     figure_errors: list[str] = []
-    for candidate in figure_blocks(html_page, html_url) if html_page else []:
+    for candidate_index, candidate in enumerate(figure_blocks(html_page, html_url) if html_page else []):
         if len(figures) >= maximum:
             break
+        if candidate_index >= maximum * 3:
+            break
         try:
-            body, content_type = fetch_bytes(candidate["source_url"], timeout=45, attempts=2)
+            body, content_type = fetch_bytes(candidate["source_url"], timeout=8, attempts=1)
             if len(body) < 256:
                 raise RuntimeError("image payload is too small")
             extension = extension_for(body, content_type, candidate["source_url"])
@@ -500,7 +529,7 @@ Every paper note must follow the exact STAR headings in `references/note-contrac
 
 - Situation: research/application setting, concrete failure mode, consequence, and why prior approaches are insufficient.
 - Task: exact input/output, objective, constraints/assumptions, evaluation target, and scope boundary.
-- Action: first recover the paper's own Method outline. If Method has N explicit first-level subsections or named components, write exactly N `### 方法部分 N：中文标题（Original Method Heading）` sections in the same order; a one-part Method gets one section. Never split or merge parts to hit a fixed count. In every part, write each Chinese translation/restatement as unlabeled regular body text and immediately follow every such paragraph with its whole-paragraph italic explanation. Never write `翻译：` or `解释：` labels. Then add exactly one `#### 必要公式与直觉` subsection: preserve every necessary formula, define its variables, calculation order, optimization/inference role, and intuitive meaning; if no key formula exists, explicitly say so without inventing one. Add exactly one corresponding `method_stages` object using `name`, `source_heading`, `translation`, `explanation`, `evidence`, `equations`, and `equation_note`.
+- Action: write a cohesive Chinese knowledge blog, not alternating translation/explanation blocks. First recover the paper's own Method outline, give a concrete end-to-end workflow, and introduce one running example. If Method has N explicit first-level subsections or named components, write exactly N `### 方法部分 N：中文标题（Original Method Heading）` sections in the same order; a one-part Method gets one section. Recover every nested subsection and distinct named operation as a natural `####` subheading. For each, name its real inputs, ordered operations and branches, outputs and downstream consumer, purpose, failure prevented, formula/selection rule, training or runtime timing, evidence, and the running example's intermediate state. Never use `翻译：`, `解释：`, generic upstream/downstream filler, a detached formula template, or omitted submodules. Add one corresponding `method_stages` object per first-level part with `overview`, `walkthrough`, structured `submodules`, and equation evidence as specified by the contract.
 - Result: metrics with dataset/environment, direction, baseline, and condition; decisive ablations or qualitative evidence; what the evidence proves and does not prove.
 
 Use only each paper's listed `figures`, keeping paths under `images/<slug>/`. Place 2–4 necessary original figures immediately after the relevant STAR explanation, with specific Chinese captions; at least one available figure must appear inside Action. Do not update the history index and do not invent evidence. Finish only after all files are complete; the deterministic verifier runs next.

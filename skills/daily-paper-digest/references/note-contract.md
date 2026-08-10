@@ -22,7 +22,7 @@ Use these exact headings and order:
 1. `## 一句话总结`
 2. `## S｜Situation：研究情境与具体失败模式`
 3. `## T｜Task：论文要解决的任务与约束`
-4. `## A｜Action：按论文 Method 逐部分翻译、解释与公式直觉`
+4. `## A｜Action：把论文方法完整走一遍`
 5. `## R｜Result：实验结果、收益与证据`
 6. `## 与我的研究方向的关联`
 7. `## 局限与证据边界`
@@ -34,7 +34,7 @@ STAR is a reasoning contract, not a cosmetic rename. Each part must be independe
 
 - **Situation** (at least 300 non-whitespace characters): define the real research/application setting, relevant data or environment, the precise failure mode, its consequence, and why representative existing approaches do not solve it. Tie the failure to paper evidence rather than giving a generic field introduction.
 - **Task** (at least 220 non-whitespace characters): define the paper's exact input and output, optimization/decision target, key constraints or assumptions, evaluation target, and what is outside scope. Explain what a successful solution must accomplish.
-- **Action**: mirror the paper's actual Method structure and translate plus explain every Method part using the standard below. Detail scales with the paper: do not pad a one-part method into three stages or collapse a multi-part method into a short summary.
+- **Action**: write a cohesive knowledge-blog explanation that mirrors the paper's actual Method structure and makes the complete operation chain reproducible from the note alone. Detail scales with the paper: do not pad a one-part method into three stages or collapse a multi-part method into a short summary.
 - **Result** (at least 300 non-whitespace characters): report the main quantitative and qualitative evidence. Every number must name the dataset/environment, metric and direction, comparison baseline, and experimental condition when available. Include the decisive ablation or failure case, then explain what the evidence establishes and what it does not.
 
 If the source omits a requested detail, explicitly say that the paper does not report it. Never fill a length requirement with repeated background, raw abstract translation, or invented mechanisms.
@@ -47,15 +47,22 @@ Determine the outline from the paper's Method section before drafting. Map each 
 
 If Method has one part, write one section. If it has N parts, write N sections. Do not invent, split, or merge parts to satisfy an arbitrary count. Do not count Related Work, Experiments, or Implementation Details as Method parts unless the paper itself places them inside Method as a substantive component.
 
-Every Method part must be at least 220 non-whitespace characters and use this sequence:
+Before the first Method part, give a concrete end-to-end workflow and introduce one running example. Reuse that example across stages so inputs, intermediate states, decisions, candidate outputs, and accept/reject conditions remain connected.
 
-1. Write a faithful Chinese translation/restatement as a normal Markdown body paragraph with no role label. Preserve the original heading's meaning, technical terms, symbols, equation references, and stated conditions without copying long passages verbatim. Never write `翻译：`, `**翻译**：`, or an equivalent prefix.
-2. Immediately after every translated/restated paragraph, add its explanation as a complete italic Markdown paragraph: `*这里解释该段如何工作……*`. Do not prefix the italic paragraph with `解释：` or `**解释**：`. The explanation must make the preceding paragraph understandable without opening the paper and, when present in the source, cover its concrete input, operation, output, objective, loss/reward, training or inference timing, downstream interface, and supporting section, figure, table, equation, or algorithm.
-3. Add exactly one `#### 必要公式与直觉` subsection. Include every formula needed to understand or reproduce this Method part, render it in LaTeX, define every variable, explain the calculation order, state which parameters or decisions it affects, and add a concrete plain-language intuition. Put prose explanations of formulas in whole-paragraph italics. If the Method part has no key formula, write `本部分无关键公式` and explain the non-mathematical rule; never invent a formula for completeness.
+Every Method part must be at least 700 non-whitespace characters. Write continuous explanatory prose in which source restatement and interpretation are fused; never write `翻译：`, `解释：`, alternating role paragraphs, or vague module boilerplate. Recover every explicit nested Method subsection and each distinct named operation. Give each one a natural `####` heading and at least 300 non-whitespace characters covering:
 
-Place each training objective, reward, key equation, and training/inference distinction inside the Method part where it appears. Define variables, state which parameters are updated, and explain the behavioral effect. If a part is inference-only or the paper omits an implementation detail, say so. Do not add detached boilerplate subsections or invented pseudo-formulas.
+- the actual input objects and their provenance;
+- the ordered operations, branches, thresholds, gates, or update rules;
+- the exact output and which next component consumes it;
+- why the submodule exists and which failure it prevents;
+- a concrete continuation of the running example;
+- the supporting source section, figure, table, equation, or algorithm.
 
-Every paper JSON must contain a `method_stages` array with exactly one object per Method part, despite the legacy field name. Each object uses keys `name`, `source_heading`, `translation`, `explanation`, `evidence`, `equations`, and `equation_note`. `equations` is an array of objects with `latex`, `variables`, `role`, `intuition`, and `evidence`; use an empty array only when no key formula exists, and explain why in `equation_note`. The array length must equal the number of `### 方法部分 N：...` sections in Markdown.
+Place each formula, training objective, reward, and selection rule at the point where the corresponding operation is explained. Render necessary formulas in LaTeX, define every variable, state the calculation order and behavioral role, and add plain-language intuition. When no formula exists, explain the real discrete procedure directly; do not add a detached “no formula” boilerplate section. Explicitly distinguish what happens during training/offline evolution and runtime inference, what parameters or artifacts change, and what is frozen or removed. If the paper omits an implementation detail, say so.
+
+Every paper JSON must contain a `method_stages` array with exactly one object per first-level Method part. Each object keeps `name`, `source_heading`, `translation`, `explanation`, and `evidence` for compatibility and additionally requires `overview`, `walkthrough`, `submodules`, `equations`, and `equation_note`. `submodules` contains one object for every nested subsection or distinct named operation, with `name`, `source_heading`, `input`, `operations`, `output`, `purpose`, and `evidence`; `operations` is an ordered array with at least two concrete steps. `equations` contains objects with `latex`, `variables`, `role`, `intuition`, and `evidence`. The Method-part count and submodule headings in Markdown must match these arrays.
+
+Reject generic filler such as “the upstream information is transformed and passed to the next module.” Name the paper's actual data structures, modules, decisions, and interfaces. Repetition of the same explanation across different Method parts is a failure, not acceptable padding.
 
 ## Figures
 

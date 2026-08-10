@@ -147,7 +147,24 @@ class VerificationTests(unittest.TestCase):
                     "source_heading": "Seed Selection and Refinement",
                     "translation": "论文把候选种子的评分、保留、丢弃与后续精炼定义为一个统一的方法部分，并明确各操作的先后关系。",
                     "explanation": "通俗地说，这一部分像一条带质量门控的流水线：候选种子和任务上下文先按论文阈值评分，低质量项被丢弃，保留项再精炼成下游训练样本。它发生在数据构造和训练准备阶段，推理时不再执行，并通过原文算法与图表给出依据。",
+                    "overview": "这一部分把原始候选变成带质量标记、可由下游训练直接消费的精炼样本。",
+                    "walkthrough": "以候选种子 A 为贯穿案例：系统先读取候选内容与任务上下文，计算原始分数，再映射到有界质量分数；通过阈值后保留并补齐来源、评分和精炼结果，未通过则记录淘汰原因。通过者随后被清理冗余内容、补足必要上下文并写入可追溯状态，最终训练器只接收已经通过门控的候选集合。这个过程同时标明各步的输入、决策分支、中间状态和下游接口。",
                     "evidence": "Method section Seed Selection and Refinement, algorithm and figure",
+                    "submodules": [
+                        {
+                            "name": "种子评分、门控与精炼",
+                            "source_heading": "Scoring, Gating, and Refinement",
+                            "input": "原始候选种子、任务上下文、候选的原始质量分数与筛选阈值。",
+                            "operations": [
+                                "读取候选和上下文，按照论文给出的评分函数计算每个候选的原始质量分数。",
+                                "把原始分数映射为有界质量分数，并与门控阈值比较以决定保留或丢弃。",
+                                "对保留候选执行内容精炼，并附加来源、质量分数与可追溯的筛选状态。",
+                            ],
+                            "output": "通过门控且完成精炼的候选集合，以及每个候选对应的评分与筛选记录。",
+                            "purpose": "在数据进入训练器之前阻断低质量候选，同时保留足够的来源信息来解释每个样本为何被接受。",
+                            "evidence": "Method equation 1, Algorithm 1, and Figure 1",
+                        }
+                    ],
                     "equations": [
                         {
                             "latex": "q_i = s_i / (1 + s_i)",
@@ -184,19 +201,24 @@ class VerificationTests(unittest.TestCase):
             atomic_write_json(day / "seed-paper.json", paper)
             core = (
                 "### 方法部分 1：种子筛选与精炼（Seed Selection and Refinement）\n\n"
-                "论文将候选种子的评分、保留、丢弃和后续精炼放在同一个 Method 小节中，"
-                "并按原文顺序说明质量门控与下游接口。\n\n"
-                "*可以把它理解为一条带质检的流水线。输入是候选种子、任务上下文及其分数表示；"
-                "系统依据论文给定的阈值和目标函数逐项评分、筛选，再对保留项执行精炼。输出是带来源与评分标记、"
-                "可直接供下游训练消费的候选集合。该操作发生在数据构造与训练准备阶段，推理时不再执行；"
-                "它的作用是在进入下游优化前阻断低质量候选造成的错误累积。证据来自 Method 小节 "
-                "Seed Selection and Refinement、对应算法与 Figure 1。*\n\n"
-                "#### 必要公式与直觉\n\n"
-                "论文用 $q_i=s_i/(1+s_i)$ 把原始候选分数 $s_i$ 压到有界质量分数 $q_i$。\n\n"
-                "*$s_i$ 越大，$q_i$ 越接近 1，但不会无限增长；训练数据门根据 $q_i$ 与阈值的比较决定保留或丢弃。"
-                "直观上，它像把不同量纲的原始成绩换算成统一百分制，避免极端大值垄断筛选结果。"
-                + "这一部分继续解释具体计算、保留条件、丢弃条件以及下游如何消费输出。" * 10
-                + "*"
+                "这一部分不是孤立的打分器，而是候选进入训练集前的一条完整质量控制链。它接收候选文本、任务上下文、"
+                "评分信号和门控阈值，依次完成评分、决策、精炼与记录；输出既包括可以训练的候选，也包括可追溯的筛选状态。"
+                "因此读者可以沿着同一个候选观察它从原始输入变成训练样本，而不是只看到一个没有上下游的公式。\n\n"
+                "#### 种子评分、门控与精炼\n\n"
+                "以候选种子 A 为例，它最初只是模型生成的一段回答，并不知道是否真的符合任务目标。第一步，系统把 A 和任务上下文"
+                "一起送入论文定义的评分过程，得到原始分数 $s_i$；这里上下文决定评分针对什么目标，候选本身则提供需要检查的内容。"
+                "第二步，论文用 $q_i=s_i/(1+s_i)$ 把原始分数映射为有界质量分数 $q_i$。当 $s_i$ 增大时，$q_i$ 越接近 1，"
+                "但不会无限放大；这相当于把尺度不稳定的原始成绩换算到统一量尺，避免个别极端分数直接支配筛选。\n\n"
+                "得到 $q_i$ 后，系统把它与论文给定的阈值比较。若 A 低于阈值，就把它从训练候选中移除，同时记录它在哪个门上失败；"
+                "若 A 通过，则进入精炼步骤。精炼不是重新发明一个样本，而是在保留原始语义的前提下清理冗余、补足必要上下文，"
+                "并附加来源、分数和筛选状态。这样，下游训练器拿到的不只是文本，还知道它为何被保留以及可以追溯到哪里。\n\n"
+                "具体来看，若 A 的原始分数为 3，则有界分数是 $q_i=3/(1+3)=0.75$；当阈值为 0.7 时它会被保留，"
+                "而原始分数为 1 的候选得到 0.5，会在门控阶段被淘汰。这个数字例子把公式、控制分支和实际输出连在了一起。"
+                "整个子模块发生在数据构造与训练准备阶段，推理时不会再次筛选同一批训练候选。Figure 1 给出输入、门控、精炼与训练器"
+                "之间的接口，Algorithm 1 则规定操作顺序；二者共同说明输出集合如何被下一阶段消费。\n\n"
+                "从作用上看，评分负责把质量判断变成可比较的量，门控负责执行保留或丢弃，精炼负责把通过者整理成稳定接口。"
+                "三步缺一不可：没有评分便无法统一比较，没有门控便不能阻断噪声，没有精炼则下游仍要面对格式与上下文不一致。"
+                "因此该模块解决的不是抽象的“提升质量”，而是明确回答每个候选经过哪些检查、在哪个条件下改变状态、最终交付什么。"
             )
             situation = (
                 "论文研究候选种子经过多阶段筛选后用于下游训练的场景。原始候选在正确性、覆盖度和难度上分布不均，"
@@ -213,6 +235,12 @@ class VerificationTests(unittest.TestCase):
                 "消融实验分别移除评分、筛选或后续变换，以确认各阶段对最终结果的贡献；定性案例补充展示保留与丢弃的候选差异。"
                 "这些证据支持多阶段链路在论文测试范围内有效，但不能证明它在未评测领域、不同预算或未披露实现条件下仍保持相同收益。"
             ) * 3
+            action_intro = (
+                "先用候选种子 A 串起整条方法链：原始生成器产生 A 后，系统读取任务上下文并计算质量分数，"
+                "再依据阈值选择保留或淘汰；通过门控的 A 会被精炼并附上来源与状态，最后才交给训练器。"
+                "沿着这个案例，读者能看到输入如何改变、每一步做出什么决策、哪个中间结果传给下一环节，以及失败候选在哪里退出。"
+                "这条端到端链路也界定了训练期与推理期：评分、门控和精炼发生在训练数据准备阶段，部署推理不会重复构造这些样本。"
+            ) * 3
             note = f"""# Seed Paper
 
 - **论文**：https://arxiv.org/abs/2608.01234
@@ -223,7 +251,8 @@ class VerificationTests(unittest.TestCase):
 {situation}
 ## T｜Task：论文要解决的任务与约束
 {task}
-## A｜Action：按论文 Method 逐部分翻译、解释与公式直觉
+## A｜Action：把论文方法完整走一遍
+{action_intro}
 {core}
 ![图 1：候选种子从生成、评分到筛选的完整方法链路](images/seed-paper/figure-01.png)
 ## R｜Result：实验结果、收益与证据
@@ -256,30 +285,30 @@ Abstract.
             with self.assertRaisesRegex(RuntimeError, "Situation"):
                 verify(config, config_path, run_date)
             (day / "seed-paper.md").write_text(
-                note.replace("#### 必要公式与直觉", "#### 公式说明"),
+                note.replace("#### 种子评分、门控与精炼", "#### 候选排序"),
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(RuntimeError, "必要公式与直觉"):
+            with self.assertRaisesRegex(RuntimeError, "heading does not match"):
                 verify(config, config_path, run_date)
             (day / "seed-paper.md").write_text(
-                note.replace("论文将候选种子", "翻译：论文将候选种子", 1),
+                note.replace("这一部分不是孤立", "翻译：这一部分不是孤立", 1),
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(RuntimeError, "must not use"):
                 verify(config, config_path, run_date)
             (day / "seed-paper.md").write_text(
-                note.replace("*可以把它理解", "可以把它理解", 1).replace(
-                    "Figure 1。*", "Figure 1。", 1
+                note.replace(
+                    "这一部分不是孤立的打分器",
+                    "原文的评分部分把该组件放在完整流水线中的对应位置。这一部分不是孤立的打分器",
+                    1,
                 ),
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(RuntimeError, "italic explanation"):
+            with self.assertRaisesRegex(RuntimeError, "generic method filler"):
                 verify(config, config_path, run_date)
             extra_part = (
                 "### 方法部分 2：虚构步骤（Invented Step）\n\n"
-                "这个部分并不存在于论文 Method 中。\n\n"
-                "*验证器应拒绝 Markdown 与 JSON 方法部分数量不一致。*\n\n"
-                "#### 必要公式与直觉\n\n本部分无关键公式。\n"
+                "这个部分并不存在于论文 Method 中，验证器应拒绝 Markdown 与 JSON 方法部分数量不一致。\n"
             )
             (day / "seed-paper.md").write_text(
                 note.replace("## R｜Result：实验结果、收益与证据", extra_part + "## R｜Result：实验结果、收益与证据"),

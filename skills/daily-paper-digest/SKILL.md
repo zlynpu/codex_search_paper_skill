@@ -44,15 +44,18 @@ If the user requests a configuration change, run `configure.py` first, then rein
    - **Action**: reconstruct the proposed method as an operation chain from actual input/data construction through training or optimization to inference/output. This is the most detailed section.
    - **Result**: report evidence with metric direction, dataset/environment, baseline, and comparison context; include ablations or qualitative findings when available and separate results from interpretation.
 
-5. In **Action**, mirror the paper's own Method structure. If Method has N explicit first-level subsections or named components, write exactly N `### 方法部分 N：中文标题（Original Heading）` sections in the same order. If Method is one unified part, write one part. Never split or merge parts merely to reach a target count. For every part:
+5. Write **Action** as a cohesive Chinese knowledge blog, not as alternating translation and explanation blocks. Start with a concrete end-to-end workflow and one running example that will be reused across the Method parts. Then mirror the paper's own Method structure: if Method has N explicit first-level subsections or named components, write exactly N `### 方法部分 N：中文标题（Original Heading）` sections in the same order. If Method is one unified part, write one part. Never split or merge parts merely to reach a target count.
 
-   - write each faithful Chinese translation/restatement as an unlabeled regular body paragraph; never prefix it with `翻译：` or a bold translation label;
-   - immediately follow every translated/restated paragraph with a whole-paragraph italic explanation of how it works, why it is needed, and how it connects to adjacent parts; never prefix it with `解释：` or a bold explanation label;
-   - add one `#### 必要公式与直觉` subsection, preserve every necessary formula from that part, define every variable, explain the calculation and its optimization/inference role, then give a plain-language intuition; if the part has no key formula, explicitly say so instead of inventing one;
-   - inside the explanation, cover concrete inputs, operations, outputs, losses, rewards, selection rules, and training/inference timing when the paper states them;
+   Within every Method part:
+
+   - weave faithful source restatement, operational explanation, motivation, and intuition into continuous prose; never emit `翻译：`, `解释：`, generic paraphrase scaffolding, or paragraph-by-paragraph role formatting;
+   - recover every explicit nested Method subsection and every distinct named operation. Give each one a natural `####` subheading and explain its concrete input, ordered operations, output, purpose, downstream interface, and evidence;
+   - trace the same running example through the submodules so the reader can see actual intermediate states rather than only component definitions;
+   - place each necessary formula exactly where its operation is introduced. Define every variable, explain the calculation order and optimization/inference role, then give a plain-language intuition. If no key formula exists, explain the actual non-mathematical procedure without adding a boilerplate formula section;
+   - distinguish training, offline evolution, and inference/runtime behavior, including what is updated, what is frozen, and what is removed at deployment;
    - cite the source heading plus the supporting section, figure, table, equation, or algorithm.
 
-   Treat translation as faithful Chinese restatement, not unexplained literal copying. Preserve technical terms and equations, then explain them so a reader can follow the operation without opening the paper. When the paper itself defines separate phases such as seed generation, scoring, pruning, refinement, and final selection, keep those same separate parts; when it groups them under one Method part, preserve that grouping and explain the internal flow there.
+   A reader must be able to reconstruct the data/control flow without opening the paper. Do not use filler such as “the upstream representation is processed and passed downstream.” Name the real objects, decisions, transformations, gates, and failure conditions. When the paper defines phases such as seed generation, scoring, pruning, refinement, or final selection, cover every phase and show how the output of one becomes the input of the next.
 
 6. Use only figures listed in that paper's JSON. Markdown image paths for paper `<slug>` must start with `images/<slug>/`; never reuse another paper's image or move all images into a shared flat namespace. Embed 2–4 semantically necessary original figures unless the source record explicitly records that fewer exist. Put each figure immediately after the STAR claim it explains, with a Chinese caption that says what to inspect and why it supports that claim. At least one available figure must appear inside **Action**; use Result figures for quantitative or qualitative evidence when useful.
 
