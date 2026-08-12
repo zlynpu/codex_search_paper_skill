@@ -39,7 +39,7 @@ If the user requests a configuration change, run `configure.py` first, then rein
 
 4. Organize every paper note with STAR. Treat STAR as an analytical structure, not four short labels:
 
-   - **Situation**: establish the application/research setting, relevant inputs or environment, the concrete failure mode, and why representative prior approaches are insufficient.
+   - **Situation**: establish the application/research setting, relevant inputs or environment, the concrete failure mode, and why representative prior approaches are insufficient. Present the conclusion directly, without describing source lookup or translation.
    - **Task**: state the exact problem the paper solves, input/output contract, optimization or decision objective, constraints, evaluation targets, and scope boundaries.
    - **Action**: reconstruct the proposed method as an operation chain from actual input/data construction through training or optimization to inference/output. This is the most detailed section.
    - **Result**: report evidence with metric direction, dataset/environment, baseline, and comparison context; include ablations or qualitative findings when available and separate results from interpretation.
@@ -48,16 +48,16 @@ If the user requests a configuration change, run `configure.py` first, then rein
 
    Within every Method part:
 
-   - weave faithful source restatement, operational explanation, motivation, and intuition into continuous prose; never emit `翻译：`, `解释：`, generic paraphrase scaffolding, or paragraph-by-paragraph role formatting;
-   - recover every explicit nested Method subsection and every distinct named operation. Give each one a natural `####` subheading and explain its concrete input, ordered operations, output, purpose, downstream interface, and evidence;
+   - first understand and translate the source internally, then weave its meaning, operational explanation, motivation, and intuition into continuous Chinese prose; never emit `翻译：`, `解释：`, source-checking commentary, generic paraphrase scaffolding, or paragraph-by-paragraph role formatting;
+   - recover every explicit nested Method subsection and every distinct named operation. Give each one a natural `####` subheading and explain its concrete input, ordered operations, output, purpose, and downstream interface;
    - trace the same running example through the submodules so the reader can see actual intermediate states rather than only component definitions;
    - place each necessary formula exactly where its operation is introduced. Define every variable, explain the calculation order and optimization/inference role, then give a plain-language intuition. If no key formula exists, explain the actual non-mathematical procedure without adding a boilerplate formula section;
    - distinguish training, offline evolution, and inference/runtime behavior, including what is updated, what is frozen, and what is removed at deployment;
-   - cite the source heading plus the supporting section, figure, table, equation, or algorithm.
+   - keep section, figure, table, equation, and algorithm provenance in the paper JSON `evidence` fields; do not narrate that audit trail in the Markdown.
 
-   A reader must be able to reconstruct the data/control flow without opening the paper. Do not use filler such as “the upstream representation is processed and passed downstream.” Name the real objects, decisions, transformations, gates, and failure conditions. When the paper defines phases such as seed generation, scoring, pruning, refinement, or final selection, cover every phase and show how the output of one becomes the input of the next.
+   A reader must be able to reconstruct the data/control flow without opening the paper. Do not use filler such as “the upstream representation is processed and passed downstream,” cross-domain catch-all examples, raw English excerpts, or phrases such as “原文操作证据为”“官方 HTML”“可核对的转换文本”. Name the real objects, decisions, transformations, gates, and failure conditions. When the paper defines phases such as seed generation, scoring, pruning, refinement, or final selection, cover every phase and show how the output of one becomes the input of the next. The `## 原文摘要` section is a fluent Chinese translation or faithful condensation, not the English abstract.
 
-6. Use only figures listed in that paper's JSON. Markdown image paths for paper `<slug>` must start with `images/<slug>/`; never reuse another paper's image or move all images into a shared flat namespace. Embed 2–4 semantically necessary original figures unless the source record explicitly records that fewer exist. Put each figure immediately after the STAR claim it explains, with a Chinese caption that says what to inspect and why it supports that claim. At least one available figure must appear inside **Action**; use Result figures for quantitative or qualitative evidence when useful.
+6. Use only figures listed in that paper's JSON. Markdown image paths for paper `<slug>` must start with `images/<slug>/`; never reuse another paper's image or move all images into a shared flat namespace. Embed 2–4 semantically necessary original figures unless the source record explicitly records that fewer exist. Put each figure immediately after the STAR claim it explains, with a Chinese caption that says what to inspect and why it supports that claim. Do not expose figure-source URLs or source-checking language in captions. At least one available figure must appear inside **Action**; use Result figures for quantitative or qualitative evidence when useful.
 
 7. Validate before publishing:
 

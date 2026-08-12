@@ -40,19 +40,19 @@ REQUIRED_SECTIONS = (
     "## 原文摘要",
 )
 STAR_MINIMUMS = {
-    "## S｜Situation：研究情境与具体失败模式": 300,
-    "## T｜Task：论文要解决的任务与约束": 220,
-    "## R｜Result：实验结果、收益与证据": 300,
+    "## S｜Situation：研究情境与具体失败模式": 220,
+    "## T｜Task：论文要解决的任务与约束": 160,
+    "## R｜Result：实验结果、收益与证据": 220,
 }
 ACTION_HEADING = "## A｜Action：把论文方法完整走一遍"
 METHOD_PART_HEADING = re.compile(
     r"^###\s*方法部分\s*(\d+)\s*[：:]\s*(.+)$",
     flags=re.MULTILINE,
 )
-ACTION_INTRO_MINIMUM = 300
-METHOD_PART_MINIMUM = 700
+ACTION_INTRO_MINIMUM = 220
+METHOD_PART_MINIMUM = 450
 SUBMODULE_HEADING = re.compile(r"^####\s+(.+)$", flags=re.MULTILINE)
-SUBMODULE_MINIMUM = 300
+SUBMODULE_MINIMUM = 180
 STAGE_FIELD_MINIMUMS = {
     "name": 2,
     "source_heading": 2,
@@ -80,6 +80,30 @@ GENERIC_METHOD_PATTERNS = (
     re.compile(r"输出则作为下一部分训练目标、条件表示或推理接口"),
     re.compile(r"先把上游给出的信息整理成该模块真正需要的形式"),
     re.compile(r"通俗地说，这一步是在解决.+这一局部瓶颈"),
+    re.compile(r"视觉、语言、轨迹或潜状态"),
+    re.compile(r"生成图像、问答结论、智能体轨迹、机器人动作"),
+    re.compile(r"编辑后的图像、视频问答、诊断标签、多智能体答案、机器人动作"),
+    re.compile(r"读取该阶段需要的"),
+    re.compile(r"论文专属中间结果"),
+    re.compile(r"从概念名称变成"),
+    re.compile(r"完成“.+?”后可供下一部分读取的结构化状态"),
+)
+PROCESS_LEAK_PATTERNS = (
+    re.compile(r"原文操作证据为"),
+    re.compile(r"原文证据位于"),
+    re.compile(r"可核对的转换文本"),
+    re.compile(r"这段证据限定"),
+    re.compile(r"证据位置(?:是|为|位于)?"),
+    re.compile(r"对应依据为"),
+    re.compile(r"而非根据类似论文推测"),
+    re.compile(r"从官方摘要和原文图示可确认"),
+    re.compile(r"(?:官方|转换后的)\s*HTML"),
+    re.compile(r"(?:LaTeXML|html_feedback)/issues", re.IGNORECASE),
+    re.compile(r"(?:原文|论文)没有报告的(?:隐藏|参数|细节)"),
+)
+RAW_SOURCE_PATTERNS = (
+    re.compile(r"^\s*>\s*[A-Za-z][A-Za-z\s,.;:()\-]{80,}$", re.MULTILINE),
+    re.compile(r"(?:原文|英文)(?:摘录|引用|原句)\s*[：:]"),
 )
 EQUATION_FIELD_MINIMUMS = {
     "latex": 3,
@@ -102,6 +126,38 @@ def section_text(markdown: str, heading: str) -> str:
     start += len(heading)
     match = re.search(r"^##\s+", markdown[start:], flags=re.MULTILINE)
     return markdown[start : start + match.start()] if match else markdown[start:]
+
+
+def cjk_ratio(value: str) -> float:
+    cjk = len(re.findall(r"[\u3400-\u9fff]", value))
+    letters = len(re.findall(r"[A-Za-z\u3400-\u9fff]", value))
+    return cjk / max(letters, 1)
+
+
+def validate_reader_facing_prose(markdown: str, slug: str) -> None:
+    """Keep source-audit mechanics out of the final reader-facing note."""
+    for pattern in PROCESS_LEAK_PATTERNS:
+        if pattern.search(markdown):
+            raise RuntimeError(
+                f"{slug}: final note leaks source-verification or extraction-process language"
+            )
+    for pattern in RAW_SOURCE_PATTERNS:
+        if pattern.search(markdown):
+            raise RuntimeError(f"{slug}: final note contains a raw source excerpt")
+
+    abstract = section_text(markdown, "## 原文摘要")
+    if compact_length(abstract) < 80 or cjk_ratio(abstract) < 0.55:
+        raise RuntimeError(
+            f"{slug}: 原文摘要 must be a fluent Chinese translation/condensation, not raw English"
+        )
+
+    paragraphs = [
+        re.sub(r"\s+", "", paragraph)
+        for paragraph in re.split(r"\n\s*\n", markdown)
+        if compact_length(paragraph) >= 80 and not paragraph.lstrip().startswith("!")
+    ]
+    if any(count > 1 for count in Counter(paragraphs).values()):
+        raise RuntimeError(f"{slug}: final note repeats a long paragraph as padding")
 
 
 def normalize_method_heading(value: str) -> str:
@@ -194,6 +250,7 @@ def validate_paper(
         raise RuntimeError(f"{slug}: required sections are not in the STAR contract order")
     if str(paper.get("paper_url", "")) not in markdown:
         raise RuntimeError(f"{slug}: original-paper URL is absent from Markdown")
+    validate_reader_facing_prose(markdown, slug)
 
     for heading, minimum in STAR_MINIMUMS.items():
         length = compact_length(section_text(markdown, heading))

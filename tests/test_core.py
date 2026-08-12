@@ -263,7 +263,7 @@ class VerificationTests(unittest.TestCase):
 ## 局限与证据边界
 局限。
 ## 原文摘要
-Abstract.
+本文研究如何把质量参差不齐的候选种子整理为可用于下游训练的可靠数据。方法先结合任务上下文为候选评分，再通过有界分数和阈值执行门控，最后精炼通过筛选的内容并保留可追溯状态。实验从最终任务表现、筛选质量和阶段消融三个角度验证了这条数据准备链路的作用。
 """
             (day / "seed-paper.md").write_text(note, encoding="utf-8")
             digest = {
@@ -300,6 +300,45 @@ Abstract.
                 note.replace(
                     "这一部分不是孤立的打分器",
                     "原文的评分部分把该组件放在完整流水线中的对应位置。这一部分不是孤立的打分器",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "generic method filler"):
+                verify(config, config_path, run_date)
+            (day / "seed-paper.md").write_text(
+                note.replace(
+                    "这一部分不是孤立的打分器",
+                    "原文操作证据为官方 HTML 的 Method 章节。这一部分不是孤立的打分器",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "source-verification"):
+                verify(config, config_path, run_date)
+            (day / "seed-paper.md").write_text(
+                note.replace(
+                    "## 原文摘要\n本文研究如何把质量参差不齐的候选种子整理为可用于下游训练的可靠数据。方法先结合任务上下文为候选评分，再通过有界分数和阈值执行门控，最后精炼通过筛选的内容并保留可追溯状态。实验从最终任务表现、筛选质量和阶段消融三个角度验证了这条数据准备链路的作用。",
+                    "## 原文摘要\nThis paper studies a seed selection pipeline that scores, gates, refines, and records generated candidates before downstream training.",
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "fluent Chinese"):
+                verify(config, config_path, run_date)
+            (day / "seed-paper.md").write_text(
+                note.replace(
+                    "这一部分不是孤立的打分器",
+                    "系统接收视觉、语言、轨迹或潜状态，再处理生成图像、问答结论、智能体轨迹、机器人动作。这一部分不是孤立的打分器",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "generic method filler"):
+                verify(config, config_path, run_date)
+            (day / "seed-paper.md").write_text(
+                note.replace(
+                    "这一部分不是孤立的打分器",
+                    "系统先读取该阶段需要的论文专属中间结果，再把它从概念名称变成可供下一部分读取的结构化状态。这一部分不是孤立的打分器",
                     1,
                 ),
                 encoding="utf-8",

@@ -1,4 +1,4 @@
 interface:
   display_name: "Daily Paper Digest"
   short_description: "Search and write validated STAR paper notes daily"
-  default_prompt: "Use $daily-paper-digest to create today’s configured, deduplicated paper digest as cohesive Chinese knowledge blogs that trace one concrete example through every Method submodule, explain formulas and runtime flow intuitively, and place original figures correctly."
+  default_prompt: "Use $daily-paper-digest to create today’s configured, deduplicated paper digest as fluent Chinese knowledge blogs: verify and translate sources internally, never expose source-checking language or raw English in the final notes, trace one concrete example through every real Method submodule, explain necessary formulas and runtime flow intuitively, and place each paper’s own figures correctly."
