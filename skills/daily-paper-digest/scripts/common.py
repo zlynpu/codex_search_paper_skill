@@ -177,7 +177,11 @@ def validate_config(config: dict[str, Any], config_path: Path) -> dict[str, int]
 
     digest = _require_mapping(config.get("digest"), "digest")
     categories = _require_list(digest.get("categories"), "digest.categories")
+    top_recommendations = digest.get("top_recommendations", 3)
+    if not isinstance(top_recommendations, int) or isinstance(top_recommendations, bool) or top_recommendations < 0:
+        raise ConfigError("digest.top_recommendations must be a non-negative integer")
     seen: set[str] = set()
+    featured_labels: set[str] = set()
     for index, category in enumerate(categories):
         category = _require_mapping(category, f"digest.categories[{index}]")
         key = category.get("key")
@@ -200,7 +204,58 @@ def validate_config(config: dict[str, Any], config_path: Path) -> dict[str, int]
             values = _require_list(category.get(field), f"category {key}.{field}")
             if not values or not all(isinstance(item, str) and item.strip() for item in values):
                 raise ConfigError(f"category {key}: {field} must contain strings")
+        negative_terms = _require_list(category.get("negative_terms", []), f"category {key}.negative_terms")
+        if not all(isinstance(item, str) and item.strip() for item in negative_terms):
+            raise ConfigError(f"category {key}: negative_terms must contain non-empty strings")
+        minimum_score = category.get("minimum_relevance_score", 0)
+        if (
+            not isinstance(minimum_score, (int, float))
+            or isinstance(minimum_score, bool)
+            or not 0 <= float(minimum_score) <= 10000
+        ):
+            raise ConfigError(f"category {key}: minimum_relevance_score must be from 0 to 10000")
+        featured = category.get("featured")
+        if featured is not None:
+            featured = _require_mapping(featured, f"category {key}.featured")
+            label = featured.get("label")
+            if not isinstance(label, str) or not label.strip():
+                raise ConfigError(f"category {key}: featured.label is required")
+            if label in featured_labels:
+                raise ConfigError(f"duplicate featured label: {label}")
+            featured_labels.add(label)
+            priority = featured.get("selection_priority")
+            if (
+                not isinstance(priority, int)
+                or isinstance(priority, bool)
+                or not 0 <= priority <= 100
+            ):
+                raise ConfigError(
+                    f"category {key}: featured.selection_priority must be an integer from 0 to 100"
+                )
+            if featured.get("confidence") not in {"normal", "high", "highest"}:
+                raise ConfigError(
+                    f"category {key}: featured.confidence must be normal, high, or highest"
+                )
+            for field in ("outside_top_recommendations", "require_detailed_note"):
+                if not isinstance(featured.get(field), bool):
+                    raise ConfigError(f"category {key}: featured.{field} must be true or false")
     quotas = allocate_quotas(config)
+    enabled_categories = {
+        str(category["key"]): category
+        for category in categories
+        if category.get("enabled", True)
+    }
+    outside_top_count = sum(
+        quotas[key]
+        for key, category in enabled_categories.items()
+        if isinstance(category.get("featured"), dict)
+        and category["featured"].get("outside_top_recommendations")
+    )
+    total_papers = int(digest["total_papers"])
+    if top_recommendations > total_papers - outside_top_count:
+        raise ConfigError(
+            "digest.top_recommendations exceeds the number of non-special papers"
+        )
 
     selection = _require_mapping(config.get("selection"), "selection")
     for field, minimum, maximum in (

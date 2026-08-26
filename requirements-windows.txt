@@ -1,1 +1,2 @@
+-r requirements.txt
 tzdata>=2025.2

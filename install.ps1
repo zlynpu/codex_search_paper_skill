@@ -23,6 +23,9 @@ if ($python) {
 } else {
     $python = Get-Command python -ErrorAction Stop
 }
+$dependencyArgs = @($pythonArgs + @("-m", "pip", "install", "--disable-pip-version-check", "-r", (Join-Path $PSScriptRoot "requirements-windows.txt")))
+& $python.Source @dependencyArgs
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $installer = Join-Path $PSScriptRoot "scripts\install.py"
 $pythonArgs += $installer
 foreach ($item in $Harness) { $pythonArgs += @("--harness", $item) }

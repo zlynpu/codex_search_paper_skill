@@ -35,6 +35,8 @@ If the user requests a configuration change, run `configure.py` first, then rein
 
    This step searches, removes known arXiv IDs and normalized duplicate titles, fills configured category quotas, and creates `<archive>/YYYY/MM/DD/` with `digest.json`, one JSON source record per paper, `sources/<slug>/`, and isolated `images/<slug>/` folders.
 
+   Categories with a `featured` block are fixed recommendation lanes, not ordinary quota hints. Select them before lower-priority categories, apply their stronger relevance threshold, and fail rather than silently replace a missing featured paper. When `outside_top_recommendations` is true, no paper in that lane may also occupy a Top recommendation slot.
+
 3. Read `<day>/JOB.md`, `<day>/digest.json`, every selected paper JSON, and the source files referenced by that JSON. Write exactly one `<slug>.md` per paper plus `<day>/digest.md`. Update each paper JSON with the analytical fields required by [note-contract.md](references/note-contract.md).
 
 4. Organize every paper note with STAR. Treat STAR as an analytical structure, not four short labels:
@@ -56,6 +58,8 @@ If the user requests a configuration change, run `configure.py` first, then rein
    - keep section, figure, table, equation, and algorithm provenance in the paper JSON `evidence` fields; do not narrate that audit trail in the Markdown.
 
    A reader must be able to reconstruct the data/control flow without opening the paper. Do not use filler such as “the upstream representation is processed and passed downstream,” cross-domain catch-all examples, raw English excerpts, or phrases such as “原文操作证据为”“官方 HTML”“可核对的转换文本”. Name the real objects, decisions, transformations, gates, and failure conditions. When the paper defines phases such as seed generation, scoring, pruning, refinement, or final selection, cover every phase and show how the output of one becomes the input of the next. The `## 原文摘要` section is a fluent Chinese translation or faithful condensation, not the English abstract.
+
+   For the `creative_design_aigc` featured lane, do not reduce the note to a model summary or visual showcase. Trace the actual creative brief or input artifact, the representation of the editable design, every agent role/tool/action, intermediate canvas/layout/UI/vector state, evaluator or human-feedback signal, revision and stopping rule, and the final editable or rendered output. Separate offline data/training from the runtime co-creation loop, and explain aesthetic, functional, controllability, editability, diversity, and human-study evidence only when the paper actually evaluates them.
 
 6. Use only figures listed in that paper's JSON. Markdown image paths for paper `<slug>` must start with `images/<slug>/`; never reuse another paper's image or move all images into a shared flat namespace. Embed 2–4 semantically necessary original figures unless the source record explicitly records that fewer exist. Put each figure immediately after the STAR claim it explains, with a Chinese caption that says what to inspect and why it supports that claim. Do not expose figure-source URLs or source-checking language in captions. At least one available figure must appear inside **Action**; use Result figures for quantitative or qualitative evidence when useful.
 
@@ -95,6 +99,7 @@ OS schedulers call the same script with `--if-due`; it evaluates the configured 
 
 - If one source is unavailable, try the bundled arXiv API/RSS/HTML fallbacks and another ranked candidate in the same category.
 - If a category cannot meet its quota, stop with a candidate report. Do not silently change the user's allocation unless `selection.allow_quota_rebalance` is enabled.
+- A featured lane never participates in quota rebalancing: its configured count, label, confidence tier, and separation from Top recommendations are hard invariants.
 - If original figures cannot be associated with the current paper, reject that candidate when the configured minimum is not met.
 - If Zotero is unavailable, keep the verified notes but do not finalize when Zotero is required.
 - If today was missed, run `run_daily.py --force --date YYYY-MM-DD`; deduplication still applies.

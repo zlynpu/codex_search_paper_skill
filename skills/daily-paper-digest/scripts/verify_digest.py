@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from PIL import Image, UnidentifiedImageError
+
 from common import (
     ConfigError,
     allocate_quotas,
@@ -117,6 +119,29 @@ ZOTERO_URI = re.compile(r"zotero://open-pdf/library/items/[A-Z0-9]{8}")
 
 def compact_length(value: str) -> int:
     return len(re.sub(r"\s+", "", value))
+
+
+def validate_original_image(path: Path, slug: str) -> None:
+    suffix = path.suffix.casefold()
+    if suffix == ".svg":
+        prefix = path.read_bytes()[:4096].lstrip().lower()
+        if b"<svg" not in prefix:
+            raise RuntimeError(f"{slug}: manifested SVG has no SVG root: {path.name}")
+        return
+    expected = {".png": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG", ".gif": "GIF", ".webp": "WEBP"}.get(suffix)
+    if not expected:
+        raise RuntimeError(f"{slug}: unsupported original-figure extension: {path.name}")
+    try:
+        with Image.open(path) as image:
+            width, height = image.size
+            actual = str(image.format or "").upper()
+            image.verify()
+    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+        raise RuntimeError(f"{slug}: original figure is not decodable: {path.name}: {exc}") from exc
+    if actual != expected:
+        raise RuntimeError(f"{slug}: figure signature {actual} does not match {path.name}")
+    if width < 64 or height < 64:
+        raise RuntimeError(f"{slug}: original figure is implausibly small: {path.name} {width}x{height}")
 
 
 def section_text(markdown: str, heading: str) -> str:
@@ -241,6 +266,15 @@ def validate_paper(
         raise RuntimeError(f"{slug}: paper JSON arXiv ID differs from digest")
     if paper.get("channel") != summary.get("channel"):
         raise RuntimeError(f"{slug}: paper JSON category differs from digest")
+    for field in (
+        "top_recommendation",
+        "special_recommendation",
+        "special_recommendation_label",
+        "recommendation_confidence",
+        "recommendation_priority",
+    ):
+        if paper.get(field) != summary.get(field):
+            raise RuntimeError(f"{slug}: paper JSON {field} differs from digest")
     markdown = markdown_path.read_text(encoding="utf-8")
     for section in REQUIRED_SECTIONS:
         if section not in markdown:
@@ -379,8 +413,10 @@ def validate_paper(
             raise RuntimeError(f"{slug}: invalid original-figure provenance")
         if not str(figure.get("path", "")).startswith(expected_prefix):
             raise RuntimeError(f"{slug}: figure manifest path escapes its paper folder")
-        if not (day / str(figure["path"])).is_file():
+        figure_path = day / str(figure["path"])
+        if not figure_path.is_file():
             raise RuntimeError(f"{slug}: figure manifest points to a missing file: {figure['path']}")
+        validate_original_image(figure_path, slug)
 
     zotero_uri = str(paper.get("zotero_uri", ""))
     if require_zotero:
@@ -425,6 +461,39 @@ def verify(
     if config["selection"].get("allow_quota_rebalance") and set(counts) - set(quotas):
         raise RuntimeError(f"digest contains disabled or unknown categories: {set(counts) - set(quotas)}")
 
+    category_map = categories_by_key(config)
+    expected_top = int(config["digest"].get("top_recommendations", 3))
+    top_papers = [paper for paper in summaries if paper.get("top_recommendation") is True]
+    if len(top_papers) != expected_top:
+        raise RuntimeError(
+            f"expected {expected_top} Top recommendations, found {len(top_papers)}"
+        )
+    for paper in summaries:
+        category = category_map[str(paper["channel"])]
+        featured = category.get("featured")
+        expected_special = bool(featured)
+        if paper.get("special_recommendation") is not expected_special:
+            raise RuntimeError(
+                f"{paper['slug']}: special recommendation flag differs from category configuration"
+            )
+        expected_label = str(featured["label"]) if featured else ""
+        expected_confidence = str(featured["confidence"]) if featured else "normal"
+        expected_priority = int(featured["selection_priority"]) if featured else 0
+        if paper.get("special_recommendation_label") != expected_label:
+            raise RuntimeError(f"{paper['slug']}: special recommendation label is incorrect")
+        if paper.get("recommendation_confidence") != expected_confidence:
+            raise RuntimeError(f"{paper['slug']}: recommendation confidence is incorrect")
+        if paper.get("recommendation_priority") != expected_priority:
+            raise RuntimeError(f"{paper['slug']}: recommendation priority is incorrect")
+        if (
+            featured
+            and featured.get("outside_top_recommendations")
+            and paper.get("top_recommendation") is True
+        ):
+            raise RuntimeError(
+                f"{paper['slug']}: featured recommendation must remain outside Top recommendations"
+            )
+
     actual_markdown = {path.stem for path in day.glob("*.md") if path.name not in {"digest.md", "JOB.md"}}
     actual_json = {path.stem for path in day.glob("*.json") if path.name != "digest.json"}
     expected = {str(paper["slug"]) for paper in summaries}
@@ -443,6 +512,15 @@ def verify(
     for category in categories_by_key(config).values():
         if category["label"] not in digest_text:
             raise RuntimeError(f"digest.md is missing category label {category['label']}")
+        featured = category.get("featured")
+        if featured and not re.search(
+            rf"^##\s+{re.escape(str(featured['label']))}\s*$",
+            digest_text,
+            flags=re.MULTILINE,
+        ):
+            raise RuntimeError(
+                f"digest.md is missing standalone featured section {featured['label']}"
+            )
     print(f"verified={day}")
     print(f"papers={len(papers)} categories={dict(counts)} images={sum(len(p['figures']) for p in papers)}")
     return day, digest, papers

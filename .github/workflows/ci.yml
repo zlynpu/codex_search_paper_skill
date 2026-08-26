@@ -16,6 +16,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -r requirements.txt
       - if: runner.os == 'Windows'
         run: python -m pip install -r requirements-windows.txt
       - if: runner.os == 'Windows'

@@ -22,9 +22,16 @@ The installed OS task wakes once per minute; `run_daily.py --if-due` performs ti
 - `search_terms`: user-controlled phrases matched against title and abstract.
 - `arxiv_categories`: source categories such as `cs.CV`, `cs.AI`, or `cs.RO`.
 - `negative_terms`: optional exclusions in addition to global exclusions.
+- `minimum_relevance_score`: optional category-specific score floor. Use it to keep a high-confidence specialty lane from accepting a paper merely because it shares an arXiv source category.
+- `featured`: optional fixed recommendation lane with:
+  - `label`: standalone `digest.md` section heading;
+  - `selection_priority`: integer from 0–100; higher lanes claim overlapping candidates first;
+  - `confidence`: `normal`, `high`, or `highest` editorial confidence tier;
+  - `outside_top_recommendations`: keep this lane separate from ordinary Top recommendations;
+  - `require_detailed_note`: require the complete note contract rather than a shortened specialty blurb.
 - `zotero_collection`: child collection name under `zotero.top_collection`.
 
-Arbitrary categories are allowed. Do not assume the five example categories are mandatory.
+Arbitrary categories are allowed. Do not assume the bundled example categories are mandatory.
 
 Examples:
 
@@ -32,12 +39,13 @@ Examples:
 python configure.py set --config CONFIG --time 08:30 --timezone Asia/Shanghai
 python configure.py set --config CONFIG --total 15 \
   --quota generation=3 --quota understanding=4 \
-  --quota agentic_rl=3 --quota embodied_vla_wam=3 --quota others=2
+  --quota agentic_rl=3 --quota embodied_vla_wam=3 \
+  --quota creative_design_aigc=1 --quota others=1
 python configure.py set --config CONFIG \
   --terms agentic_rl="agentic reinforcement learning|tool-use agent|RLVR"
 ```
 
-For a new category or advanced edits, modify the JSON directly and run `configure.py validate`.
+For a new category, featured lane, or advanced edit, modify the JSON directly and run `configure.py validate`. A featured lane with `outside_top_recommendations: true` consumes its category quota but does not consume a Top recommendation slot.
 
 ## Selection and archive
 

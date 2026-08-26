@@ -65,6 +65,18 @@ Every paper JSON must contain a `method_stages` array with exactly one object pe
 
 Reject generic filler such as “the upstream information is transformed and passed to the next module,” as well as universal cross-domain bundles such as “视觉、语言、轨迹或潜状态.” Name this paper's actual data structures, modules, decisions, and interfaces. Repetition of the same paragraph across different Method parts is a failure, not acceptable padding. Completeness means covering every real component and transition, not making the note long through repetition.
 
+### Creative Agent / Design AIGC featured trace
+
+For a paper in `creative_design_aigc`, the full Action contract still applies. In addition, reconstruct the design workflow using the paper's real objects rather than generic “prompt in, image out” wording:
+
+- identify the creative brief, reference assets, constraints, user edits, or initial artifact that actually enter the system;
+- explain how the design remains editable—such as canvas layers, layout graphs, DOM/UI trees, vector primitives, CAD parameters, scene graphs, or another paper-specific representation;
+- trace each agent role, callable tool, action space, planner, memory, critic/evaluator, intermediate artifact, revision loop, branch, and stopping rule that the method really uses;
+- distinguish dataset construction and training objectives from runtime generation, tool execution, human interaction, and iterative refinement;
+- connect visual or design figures to the exact operation they clarify, and explain evaluations for function, aesthetics, controllability, editability, diversity, preference, or human collaboration only under the reported protocol.
+
+If the paper addresses only one of these dimensions, explain that dimension completely and do not invent the rest. The featured label raises selection priority; it does not relax evidence requirements or justify unsupported claims.
+
 ## Figures
 
 Embed 2–4 original figures selected for explanatory value. Use a relative path such as `images/my-paper/figure-01.png`. Place each figure immediately after the relevant Situation, Action, or Result paragraph, not in a detached gallery. At least one available figure must appear inside Action. Its Chinese caption must identify the paper figure number, what the reader should inspect, and which claim or Method part it supports. Captions must not expose source URLs or say that the figure is “用于核对”. Never claim a rendered PDF page or self-drawn diagram is an original paper figure.
@@ -80,6 +92,7 @@ Record experimental setting and comparable baselines with every numeric result. 
 - configured date and search window;
 - actual count and per-category counts;
 - Top recommendations with a concrete reason;
+- every configured featured lane as its own exact `## <featured.label>` section, separate from Top recommendations, with its note and Zotero links plus a concrete reason;
 - one table per enabled category linking to note Markdown and Zotero when present;
 - a cross-paper synthesis;
 - source failures or degraded paths.

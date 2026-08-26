@@ -9,6 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from PIL import Image
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_SCRIPTS = ROOT / "skills" / "daily-paper-digest" / "scripts"
@@ -22,7 +24,13 @@ from common import (  # noqa: E402
     normalize_title,
     validate_config,
 )
-from prepare_digest import parse_atom, parse_recent_html, score_for_category  # noqa: E402
+from prepare_digest import (  # noqa: E402
+    apply_recommendation_metadata,
+    parse_atom,
+    parse_recent_html,
+    score_for_category,
+    top_recommendation_ids,
+)
 from run_daily import due, harness_command  # noqa: E402
 from verify_digest import finalize, verify  # noqa: E402
 
@@ -40,14 +48,15 @@ class ConfigurationTests(unittest.TestCase):
                 "understanding": 4,
                 "agentic_rl": 3,
                 "embodied_vla_wam": 3,
-                "others": 2,
+                "creative_design_aigc": 1,
+                "others": 1,
             },
         )
 
     def test_weight_allocation_uses_largest_remainder(self):
         config = template()
         config["digest"]["total_papers"] = 7
-        for category, weight in zip(config["digest"]["categories"], (4, 1, 1, 1, 1)):
+        for category, weight in zip(config["digest"]["categories"], (4, 1, 1, 1, 1, 1)):
             category.pop("quota")
             category["weight"] = weight
         self.assertEqual(sum(allocate_quotas(config).values()), 7)
@@ -94,6 +103,44 @@ class SearchTests(unittest.TestCase):
         self.assertEqual([record["arxiv_id"] for record in records], ["2608.01234", "2608.05678"])
         self.assertEqual(records[0]["title"], "First Agent Paper")
 
+    def test_design_lane_uses_strict_relevance_and_stays_outside_top_three(self):
+        config = template()
+        categories = {
+            category["key"]: category for category in config["digest"]["categories"]
+        }
+        design = categories["creative_design_aigc"]
+        relevant = {
+            "title": "A Creative Agent for Editable Interface Design",
+            "abstract": "Human-AI co-creation uses a design agent and a revision loop.",
+            "source_categories": ["cs.HC"],
+            "published": "",
+        }
+        unrelated = {
+            "title": "A Benchmark for General Human Computer Interaction",
+            "abstract": "The study evaluates interaction techniques.",
+            "source_categories": ["cs.HC"],
+            "published": "",
+        }
+        self.assertGreaterEqual(
+            score_for_category(relevant, design, []), design["minimum_relevance_score"]
+        )
+        self.assertLess(
+            score_for_category(unrelated, design, []), design["minimum_relevance_score"]
+        )
+
+        papers = [
+            {"arxiv_id": "1", "channel": "creative_design_aigc", "selection_score": 99.0},
+            {"arxiv_id": "2", "channel": "generation", "selection_score": 50.0},
+            {"arxiv_id": "3", "channel": "understanding", "selection_score": 40.0},
+            {"arxiv_id": "4", "channel": "agentic_rl", "selection_score": 30.0},
+        ]
+        for paper in papers:
+            apply_recommendation_metadata(paper, categories[paper["channel"]])
+        top_ids = top_recommendation_ids(papers, categories, 3)
+        self.assertEqual(top_ids, {"2", "3", "4"})
+        self.assertTrue(papers[0]["special_recommendation"])
+        self.assertEqual(papers[0]["recommendation_confidence"], "highest")
+
 
 class RunnerTests(unittest.TestCase):
     def test_due_respects_configured_time_and_completion(self):
@@ -139,8 +186,8 @@ class VerificationTests(unittest.TestCase):
             day = root / "archive/2026/08/06"
             image_dir = day / "images/seed-paper"
             image_dir.mkdir(parents=True)
-            (image_dir / "figure-01.png").write_bytes(b"png-one")
-            (image_dir / "figure-02.png").write_bytes(b"png-two")
+            Image.new("RGB", (64, 64), "white").save(image_dir / "figure-01.png")
+            Image.new("RGB", (64, 64), "gray").save(image_dir / "figure-02.png")
             stages = [
                 {
                     "name": "种子筛选与精炼",
@@ -187,6 +234,10 @@ class VerificationTests(unittest.TestCase):
                 "channel": "generation",
                 "slug": "seed-paper",
                 "top_recommendation": False,
+                "special_recommendation": False,
+                "special_recommendation_label": "",
+                "recommendation_confidence": "normal",
+                "recommendation_priority": 0,
                 "method_stages": stages,
                 "figures": [
                     {

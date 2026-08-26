@@ -16,7 +16,7 @@
 
 - 用户显式指定推送时间、IANA 时区、每天总篇数。
 - 用户显式指定任意论文类别、检索词、arXiv 来源分类和每类精确配额；也支持权重自动换算整数配额。
-- 默认 15 篇配比：生成 3、理解 4、Agentic RL 3、具身/VLA/WAM 3、其他 2。
+- 默认 15 篇配比：生成 3、理解 4、Agentic RL 3、具身/VLA/WAM 3、Creative Agent / Design AIGC 专项 1、其他 1。Design 专项以最高选择优先级固定保留，并独立于 Top 3 展示。
 - arXiv ID 去版本去重，并对标准化标题二次去重；只有完整验证成功才写历史。
 - 每篇论文的图片固定放在 `images/<paper-slug>/`，验证器禁止笔记引用其他论文的图片。
 - 每篇笔记强制按 STAR 展开：Situation 交代场景与失败模式，Task 定义输入输出、目标和约束；Action 写成连续的中文知识博客，先用一个具体案例串起全流程，再按论文 Method 原结构覆盖每个子模块、真实输入、逐步操作、输出接口、必要公式与训练/推理差异；Result 用指标、基线和消融收束。原文核验、逐句翻译和证据定位只发生在写作过程与 JSON 审计字段中，最终 Markdown 禁止“翻译/解释”标签、原文核对话术、英文摘要、通用占位句和省略子模块。
@@ -35,6 +35,8 @@
   ```powershell
   py -3 -m pip install -r requirements-windows.txt
   ```
+
+安装脚本会自动安装图片真实性校验所需的 Pillow；Windows 还会一并安装 IANA 时区数据。若网络策略禁止安装器联网，可先手动安装上述 requirements，再重新运行安装器。
 
 ## 安装
 
@@ -56,7 +58,8 @@ cd codex_search_paper_skill
   --quota understanding=4 \
   --quota agentic_rl=3 \
   --quota embodied_vla_wam=3 \
-  --quota others=2
+  --quota creative_design_aigc=1 \
+  --quota others=1
 ```
 
 只安装、不注册系统定时任务时加 `--no-schedule`。
@@ -74,7 +77,7 @@ py -3 -m pip install -r requirements-windows.txt
   -Time "09:00" `
   -Timezone "Asia/Shanghai" `
   -Total 15 `
-  -Quota @("generation=3", "understanding=4", "agentic_rl=3", "embodied_vla_wam=3", "others=2")
+  -Quota @("generation=3", "understanding=4", "agentic_rl=3", "embodied_vla_wam=3", "creative_design_aigc=1", "others=1")
 ```
 
 安装器会注册当前用户的 `DailyPaperDigest` 计划任务，不需要管理员权限，但用户需要处于登录状态。检查与立即触发：
@@ -125,7 +128,8 @@ python ~/.agents/skills/daily-paper-digest/scripts/configure.py set \
   --quota understanding=4 \
   --quota agentic_rl=3 \
   --quota embodied_vla_wam=3 \
-  --quota others=2
+  --quota creative_design_aigc=1 \
+  --quota others=1
 ```
 
 显式修改某类检索范围：

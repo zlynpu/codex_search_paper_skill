@@ -23,6 +23,8 @@ def main() -> int:
         ROOT / "install.sh",
         ROOT / "install.ps1",
         ROOT / "config.example.json",
+        ROOT / "requirements.txt",
+        ROOT / "requirements-windows.txt",
     ]
     for path in required:
         if not path.is_file():

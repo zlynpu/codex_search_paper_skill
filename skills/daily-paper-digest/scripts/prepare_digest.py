@@ -19,8 +19,11 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, time as day_time, timedelta, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Any
+
+from PIL import Image, UnidentifiedImageError
 
 from common import (
     ConfigError,
@@ -325,6 +328,40 @@ def score_for_category(record: dict[str, Any], category: dict[str, Any], global_
     return score
 
 
+def apply_recommendation_metadata(paper: dict[str, Any], category: dict[str, Any]) -> None:
+    """Persist deterministic recommendation-lane metadata on each selected paper."""
+    featured = category.get("featured")
+    paper["special_recommendation"] = bool(featured)
+    paper["special_recommendation_label"] = str(featured.get("label", "")) if featured else ""
+    paper["recommendation_confidence"] = str(featured.get("confidence", "normal")) if featured else "normal"
+    paper["recommendation_priority"] = int(featured.get("selection_priority", 0)) if featured else 0
+
+
+def top_recommendation_ids(
+    papers: list[dict[str, Any]],
+    categories: dict[str, dict[str, Any]],
+    requested_count: int,
+) -> set[str]:
+    eligible = [
+        paper
+        for paper in papers
+        if not (categories[str(paper["channel"])].get("featured") or {}).get(
+            "outside_top_recommendations", False
+        )
+    ]
+    if len(eligible) < requested_count:
+        raise RuntimeError(
+            f"Top recommendations require {requested_count} ordinary papers, "
+            f"but only {len(eligible)} are eligible outside featured lanes"
+        )
+    return {
+        str(paper["arxiv_id"])
+        for paper in sorted(eligible, key=lambda item: item["selection_score"], reverse=True)[
+            :requested_count
+        ]
+    }
+
+
 def meta_values(page: str) -> dict[str, list[str]]:
     values: dict[str, list[str]] = {}
     for tag in re.findall(r"<meta\b[^>]*>", page, re.I):
@@ -352,9 +389,14 @@ def figure_blocks(page: str, base_url: str) -> list[dict[str, str]]:
     figures: list[dict[str, str]] = []
     for block in blocks:
         image = re.search(r"<img\b[^>]*\bsrc\s*=\s*(['\"])(.*?)\1", block, re.I | re.S)
-        if not image:
+        vector = re.search(
+            r"<object\b[^>]*\btype\s*=\s*(['\"])image/svg\+xml\1[^>]*\bdata\s*=\s*(['\"])(.*?)\2",
+            block,
+            re.I | re.S,
+        )
+        if not image and not vector:
             continue
-        source = html.unescape(image.group(2)).strip()
+        source = html.unescape(image.group(2) if image else vector.group(3)).strip()
         if not source or source.startswith("data:") or "/static/" in source:
             continue
         caption_match = re.search(r"<figcaption\b[^>]*>(.*?)</figcaption>", block, re.I | re.S)
@@ -365,7 +407,11 @@ def figure_blocks(page: str, base_url: str) -> list[dict[str, str]]:
 
 def extension_for(body: bytes, content_type: str, url: str) -> str:
     lowered = content_type.casefold()
-    if "svg" in lowered or body.lstrip().startswith(b"<svg"):
+    stripped = body.lstrip()
+    prefix = stripped[:512].lower()
+    if "text/html" in lowered or "application/xhtml" in lowered or prefix.startswith((b"<!doctype html", b"<html")):
+        return ".bin"
+    if "svg" in lowered or stripped.startswith(b"<svg") or (stripped.startswith(b"<?xml") and b"<svg" in prefix):
         return ".svg"
     if body.startswith(b"\x89PNG"):
         return ".png"
@@ -376,7 +422,35 @@ def extension_for(body: bytes, content_type: str, url: str) -> str:
     if body.startswith(b"RIFF") and b"WEBP" in body[:16]:
         return ".webp"
     suffix = Path(urllib.parse.urlparse(url).path).suffix.casefold()
-    return suffix if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"} else ".bin"
+    return suffix if lowered.startswith("image/") and suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"} else ".bin"
+
+
+def validate_image_payload(body: bytes, extension: str) -> None:
+    if extension == ".svg":
+        prefix = body.lstrip()[:4096].lower()
+        if b"<svg" not in prefix:
+            raise RuntimeError("SVG response has no SVG root element")
+        return
+    expected = {
+        ".png": "PNG",
+        ".jpg": "JPEG",
+        ".jpeg": "JPEG",
+        ".gif": "GIF",
+        ".webp": "WEBP",
+    }.get(extension)
+    if not expected:
+        raise RuntimeError(f"unsupported image extension {extension}")
+    try:
+        with Image.open(BytesIO(body)) as image:
+            width, height = image.size
+            actual = str(image.format or "").upper()
+            image.verify()
+    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+        raise RuntimeError(f"image payload is not decodable: {exc}") from exc
+    if actual != expected:
+        raise RuntimeError(f"image signature reports {actual}, expected {expected}")
+    if width < 64 or height < 64:
+        raise RuntimeError(f"image dimensions are implausibly small: {width}x{height}")
 
 
 def enrich_metadata(record: dict[str, Any]) -> tuple[dict[str, Any], str]:
@@ -425,7 +499,11 @@ def materialize(
         f"https://ar5iv.labs.arxiv.org/html/{identifier}",
     ):
         try:
-            body, content_type = fetch_bytes(url, timeout=10, attempts=1)
+            # arXiv HTML pages can be several hundred kilobytes and the
+            # official endpoint is often deliberately slow just after the
+            # daily release.  Ten seconds rejected otherwise healthy papers
+            # before their figures could be inspected.
+            body, content_type = fetch_bytes(url, timeout=90, attempts=1)
             candidate = body.decode("utf-8", errors="replace")
             lowered = candidate.casefold()
             if "ltx_document" not in lowered and "<article" not in lowered:
@@ -453,12 +531,13 @@ def materialize(
         if candidate_index >= maximum * 3:
             break
         try:
-            body, content_type = fetch_bytes(candidate["source_url"], timeout=8, attempts=1)
+            body, content_type = fetch_bytes(candidate["source_url"], timeout=45, attempts=1)
             if len(body) < 256:
                 raise RuntimeError("image payload is too small")
             extension = extension_for(body, content_type, candidate["source_url"])
             if extension == ".bin":
                 raise RuntimeError(f"unrecognized image content type {content_type}")
+            validate_image_payload(body, extension)
             filename = f"figure-{len(figures) + 1:02d}{extension}"
             (image_dir / filename).write_bytes(body)
             figures.append(
@@ -508,8 +587,25 @@ def config_fingerprint(config: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()[:16]
 
 
-def job_markdown(config_path: Path, run_date: date, papers: list[dict[str, Any]], quotas: dict[str, int]) -> str:
+def job_markdown(
+    config: dict[str, Any],
+    config_path: Path,
+    run_date: date,
+    papers: list[dict[str, Any]],
+    quotas: dict[str, int],
+) -> str:
     slugs = "\n".join(f"- `{paper['slug']}` — {paper['title']}" for paper in papers)
+    featured_lines = []
+    for category in categories_by_key(config).values():
+        featured = category.get("featured")
+        if not featured:
+            continue
+        featured_lines.append(
+            f"- `{featured['label']}`: category `{category['key']}`, exactly {quotas[str(category['key'])]} paper(s), "
+            f"confidence `{featured['confidence']}`, selection priority {featured['selection_priority']}, "
+            f"outside Top recommendations={str(featured['outside_top_recommendations']).lower()}"
+        )
+    featured_block = "\n".join(featured_lines) if featured_lines else "- None"
     return f"""# Daily paper job: {run_date.isoformat()}
 
 Use the installed `$daily-paper-digest` skill and obey its note contract.
@@ -518,6 +614,10 @@ Use the installed `$daily-paper-digest` skill and obey its note contract.
 - Date: `{run_date.isoformat()}`
 - Papers: {len(papers)}
 - Exact allocation: `{json.dumps(quotas, ensure_ascii=False)}`
+
+Featured recommendation lanes:
+
+{featured_block}
 
 Prepared papers:
 
@@ -533,6 +633,8 @@ Every paper note must follow the exact STAR headings in `references/note-contrac
 - Result: metrics with dataset/environment, direction, baseline, and condition; decisive ablations or qualitative evidence; what the evidence proves and does not prove.
 
 Translate and synthesize all reader-facing prose before writing it. `## 原文摘要` must contain fluent Chinese, never a pasted English abstract. Use only each paper's listed `figures`, keeping paths under `images/<slug>/`. Place 2–4 necessary original figures immediately after the relevant STAR explanation, with specific Chinese captions and no source-checking language; at least one available figure must appear inside Action. Do not update the history index and do not invent evidence. Finish only after all files are complete; the deterministic verifier runs next.
+
+Keep every configured featured lane visibly separate from the ordinary Top recommendations in `digest.md`. Use its exact configured label as an `##` heading, link its selected note and Zotero PDF, and state a concrete recommendation reason. A featured paper marked `require_detailed_note` receives the full note contract without abbreviation; for Creative Agent / Design AIGC, also follow the domain-specific trace in `references/note-contract.md`.
 """
 
 
@@ -577,11 +679,20 @@ def prepare(config: dict[str, Any], config_path: Path, run_date: date, refresh: 
             (score_for_category(record, category, global_negative), record)
             for record in fresh
         ]
+        minimum_score = float(category.get("minimum_relevance_score", 0))
         ranked[key] = sorted(
-            ((score, record) for score, record in scored if score > 0),
+            ((score, record) for score, record in scored if score > 0 and score >= minimum_score),
             key=lambda item: (item[0], item[1].get("published", ""), item[1]["arxiv_id"]),
             reverse=True,
         )
+
+    selection_order = sorted(
+        categories,
+        key=lambda key: int(
+            (categories[key].get("featured") or {}).get("selection_priority", 0)
+        ),
+        reverse=True,
+    )
 
     day.parent.mkdir(parents=True, exist_ok=True)
     selected: list[dict[str, Any]] = []
@@ -591,7 +702,8 @@ def prepare(config: dict[str, Any], config_path: Path, run_date: date, refresh: 
     with tempfile.TemporaryDirectory(prefix=f".{run_date.isoformat()}-", dir=day.parent) as temporary:
         build = Path(temporary) / "day"
         build.mkdir()
-        for key, quota in quotas.items():
+        for key in selection_order:
+            quota = quotas[key]
             if quota == 0:
                 continue
             filled = 0
@@ -608,13 +720,17 @@ def prepare(config: dict[str, Any], config_path: Path, run_date: date, refresh: 
                 if normalize_title(paper["title"]) in {normalize_title(item["title"]) for item in selected}:
                     failures.append({"arxiv_id": identifier, "channel": key, "error": "duplicate normalized title in current run"})
                     continue
+                apply_recommendation_metadata(paper, categories[key])
                 selected.append(paper)
                 selected_ids.add(identifier)
                 filled += 1
                 print(f"selected {key} {identifier} {paper['title']}", flush=True)
                 if filled == quota:
                     break
-            if filled != quota and not config["selection"].get("allow_quota_rebalance"):
+            if filled != quota and (
+                categories[key].get("featured")
+                or not config["selection"].get("allow_quota_rebalance")
+            ):
                 report = {
                     "date": run_date.isoformat(),
                     "required_quotas": quotas,
@@ -632,6 +748,7 @@ def prepare(config: dict[str, Any], config_path: Path, run_date: date, refresh: 
                 (
                     (score, key, record)
                     for key, candidates in ranked.items()
+                    if not categories[key].get("featured")
                     for score, record in candidates
                 ),
                 key=lambda item: (item[0], item[2].get("published", ""), item[2]["arxiv_id"]),
@@ -651,6 +768,7 @@ def prepare(config: dict[str, Any], config_path: Path, run_date: date, refresh: 
                 if title_key in {normalize_title(item["title"]) for item in selected}:
                     failures.append({"arxiv_id": identifier, "channel": key, "error": "duplicate normalized title in current run"})
                     continue
+                apply_recommendation_metadata(paper, categories[key])
                 selected.append(paper)
                 selected_ids.add(identifier)
                 print(f"rebalanced {key} {identifier} {paper['title']}", flush=True)
@@ -672,11 +790,8 @@ def prepare(config: dict[str, Any], config_path: Path, run_date: date, refresh: 
                 f"required {config['digest']['total_papers']} papers but only {len(selected)} passed; see {log_dir}"
             )
 
-        top_count = min(int(config["digest"].get("top_recommendations", 3)), len(selected))
-        top_ids = {
-            paper["arxiv_id"]
-            for paper in sorted(selected, key=lambda item: item["selection_score"], reverse=True)[:top_count]
-        }
+        requested_top_count = int(config["digest"].get("top_recommendations", 3))
+        top_ids = top_recommendation_ids(selected, categories, requested_top_count)
         for paper in selected:
             paper["top_recommendation"] = paper["arxiv_id"] in top_ids
             atomic_write_json(build / f"{paper['slug']}.json", paper)
@@ -691,13 +806,26 @@ def prepare(config: dict[str, Any], config_path: Path, run_date: date, refresh: 
             "config_path": str(config_path),
             "status": "prepared",
             "quotas": quotas,
+            "featured_recommendations": [
+                {
+                    "category": key,
+                    "label": category["featured"]["label"],
+                    "count": quotas[key],
+                    "confidence": category["featured"]["confidence"],
+                    "selection_priority": category["featured"]["selection_priority"],
+                    "outside_top_recommendations": category["featured"]["outside_top_recommendations"],
+                    "require_detailed_note": category["featured"]["require_detailed_note"],
+                }
+                for key, category in categories.items()
+                if category.get("featured")
+            ],
             "counts": {"papers": len(selected), "original_images": sum(len(p["figures"]) for p in selected)},
             "source_errors": source_errors,
             "selection_failures": failures,
             "papers": selected,
         }
         atomic_write_json(build / "digest.json", payload)
-        atomic_write_text(build / "JOB.md", job_markdown(config_path, run_date, selected, quotas))
+        atomic_write_text(build / "JOB.md", job_markdown(config, config_path, run_date, selected, quotas))
         build.rename(day)
     print(f"prepared={day}")
     return day

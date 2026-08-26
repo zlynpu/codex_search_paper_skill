@@ -53,9 +53,26 @@
         "zotero_collection": "Embodied · VLA · WAM"
       },
       {
+        "key": "creative_design_aigc",
+        "label": "Creative Agent · Design AIGC",
+        "quota": 1,
+        "search_terms": ["creative agent", "creativity agent", "co-creative agent", "creative AI", "AI-assisted design", "AI for design", "design agent", "agentic design", "design copilot", "design AIGC", "generative design", "multimodal design", "graphic design generation", "layout generation", "visual layout generation", "UI generation", "user interface generation", "web design generation", "vector graphics generation", "SVG generation", "poster generation", "logo generation", "typography generation", "creative workflow", "human-AI co-creation", "computational creativity", "design automation"],
+        "arxiv_categories": ["cs.AI", "cs.CV", "cs.HC", "cs.MM", "cs.CL", "cs.GR"],
+        "negative_terms": ["drug design", "protein design", "molecule design", "circuit design", "chip design", "antenna design", "network design", "controller design", "experimental design", "study design", "mechanism design"],
+        "minimum_relevance_score": 8.0,
+        "featured": {
+          "label": "Design 专项",
+          "selection_priority": 100,
+          "confidence": "highest",
+          "outside_top_recommendations": true,
+          "require_detailed_note": true
+        },
+        "zotero_collection": "Creative Agent · Design AIGC"
+      },
+      {
         "key": "others",
         "label": "世界模型与其他",
-        "quota": 2,
+        "quota": 1,
         "search_terms": ["world model", "world simulator", "interactive world", "video world", "visual tokenizer", "future prediction", "neural rendering", "3D generation", "4D generation", "multimodal foundation model"],
         "arxiv_categories": ["cs.CV", "cs.AI", "cs.LG"],
         "negative_terms": [],
